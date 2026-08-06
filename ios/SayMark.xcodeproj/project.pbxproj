@@ -1,0 +1,412 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		077821D4DAD105FC5D55F831 /* APIResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 534CC3857ABACD6BFE3E66D7 /* APIResponse.swift */; };
+		08321E07222430C5E9865953 /* NoteViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4E11FF51E485892D46416D5 /* NoteViewModel.swift */; };
+		0E64FD8EF3DDA32C87734AF2 /* NewItemSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FCDBAACBD2E906F961A3316 /* NewItemSheet.swift */; };
+		138575BC3E0A73D60E058414 /* NoteFile.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6C5D5E150B8A589F5E86285 /* NoteFile.swift */; };
+		280AF87DA00D24BA0E04BFA0 /* FileDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6E93B02CE6559CB2B99C737 /* FileDetailView.swift */; };
+		2825E1D69940380CF9B0D2E6 /* AppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 336C65318C2A54C41652517F /* AppConfig.swift */; };
+		3390EA87678E012DA745ACAD /* FolderRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD61E5389B76681453EA71E2 /* FolderRowView.swift */; };
+		39F89E534DC36A62E2930D57 /* SpeechRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = D555133413D382A2720F3DC3 /* SpeechRecognizer.swift */; };
+		414DB19B05F096E7AF7FDB85 /* FolderTreeViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2F7AEFF0E1C1CF1FBEA0C57 /* FolderTreeViewModel.swift */; };
+		5D3B6DB8204DAEF7EB40E8BF /* SayMarkApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26CB68B600C2C97B1F527BD7 /* SayMarkApp.swift */; };
+		801032D12F7B05C048103F42 /* FolderTreeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43CF3E21C3E5B6A8894B7FCF /* FolderTreeView.swift */; };
+		93F114A86FD2264DDE7F3364 /* CommandInputView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87B8EE13F86150EC6154F854 /* CommandInputView.swift */; };
+		9586C12AC4104279C8C1EB77 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78D535DE97CFB3E5EAD25013 /* RootView.swift */; };
+		976E757D0845ED579F33FEE0 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 099E35E2057B6628935FADBA /* APIClient.swift */; };
+		A13B79469543BFFCD8FD1C2E /* FileRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF43A400AD413C7D8F99F647 /* FileRowView.swift */; };
+		A39DAAB1DE80E554BEB7406A /* RenameSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD6A795B59A8165D2D98B1C5 /* RenameSheet.swift */; };
+		DA89DC1AEF71CB821D115667 /* Folder.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA85CA260FA3DB7EC67B9F87 /* Folder.swift */; };
+		E3BE218B575B86E0749ADA7E /* RecordNoteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2C8BC0374CAB3479D61F9F9 /* RecordNoteView.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		099E35E2057B6628935FADBA /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
+		0FCDBAACBD2E906F961A3316 /* NewItemSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewItemSheet.swift; sourceTree = "<group>"; };
+		26CB68B600C2C97B1F527BD7 /* SayMarkApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SayMarkApp.swift; sourceTree = "<group>"; };
+		336C65318C2A54C41652517F /* AppConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfig.swift; sourceTree = "<group>"; };
+		43CF3E21C3E5B6A8894B7FCF /* FolderTreeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolderTreeView.swift; sourceTree = "<group>"; };
+		534CC3857ABACD6BFE3E66D7 /* APIResponse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIResponse.swift; sourceTree = "<group>"; };
+		78D535DE97CFB3E5EAD25013 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		87B8EE13F86150EC6154F854 /* CommandInputView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandInputView.swift; sourceTree = "<group>"; };
+		BB4A4C0AC8816F24E4876B38 /* SayMark.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = SayMark.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		C2C8BC0374CAB3479D61F9F9 /* RecordNoteView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordNoteView.swift; sourceTree = "<group>"; };
+		C4E11FF51E485892D46416D5 /* NoteViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteViewModel.swift; sourceTree = "<group>"; };
+		CA85CA260FA3DB7EC67B9F87 /* Folder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Folder.swift; sourceTree = "<group>"; };
+		CD6A795B59A8165D2D98B1C5 /* RenameSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RenameSheet.swift; sourceTree = "<group>"; };
+		D555133413D382A2720F3DC3 /* SpeechRecognizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechRecognizer.swift; sourceTree = "<group>"; };
+		D6E93B02CE6559CB2B99C737 /* FileDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileDetailView.swift; sourceTree = "<group>"; };
+		DD61E5389B76681453EA71E2 /* FolderRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolderRowView.swift; sourceTree = "<group>"; };
+		E2F7AEFF0E1C1CF1FBEA0C57 /* FolderTreeViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolderTreeViewModel.swift; sourceTree = "<group>"; };
+		EF43A400AD413C7D8F99F647 /* FileRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileRowView.swift; sourceTree = "<group>"; };
+		F6C5D5E150B8A589F5E86285 /* NoteFile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteFile.swift; sourceTree = "<group>"; };
+		FC8E563450A1B027FF2C4603 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		10867841005AC8DA2F1E2004 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				534CC3857ABACD6BFE3E66D7 /* APIResponse.swift */,
+				CA85CA260FA3DB7EC67B9F87 /* Folder.swift */,
+				F6C5D5E150B8A589F5E86285 /* NoteFile.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		34F71E55134097EC1E3C339E /* SayMark */ = {
+			isa = PBXGroup;
+			children = (
+				90815DC9B3A49C11B70A4AF4 /* App */,
+				10867841005AC8DA2F1E2004 /* Models */,
+				A0AFCDC563DBB6C92E0A64C2 /* Networking */,
+				CFE8FC6F972EFE4E7D550317 /* Resources */,
+				945726752CDCB6B27D0588EC /* Services */,
+				86B6058B6FEF32CDDD57F018 /* ViewModels */,
+				664F6282D8285F39FF6347DE /* Views */,
+			);
+			path = SayMark;
+			sourceTree = "<group>";
+		};
+		664F6282D8285F39FF6347DE /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				87B8EE13F86150EC6154F854 /* CommandInputView.swift */,
+				D6E93B02CE6559CB2B99C737 /* FileDetailView.swift */,
+				EF43A400AD413C7D8F99F647 /* FileRowView.swift */,
+				DD61E5389B76681453EA71E2 /* FolderRowView.swift */,
+				43CF3E21C3E5B6A8894B7FCF /* FolderTreeView.swift */,
+				0FCDBAACBD2E906F961A3316 /* NewItemSheet.swift */,
+				C2C8BC0374CAB3479D61F9F9 /* RecordNoteView.swift */,
+				CD6A795B59A8165D2D98B1C5 /* RenameSheet.swift */,
+				78D535DE97CFB3E5EAD25013 /* RootView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		86B6058B6FEF32CDDD57F018 /* ViewModels */ = {
+			isa = PBXGroup;
+			children = (
+				E2F7AEFF0E1C1CF1FBEA0C57 /* FolderTreeViewModel.swift */,
+				C4E11FF51E485892D46416D5 /* NoteViewModel.swift */,
+			);
+			path = ViewModels;
+			sourceTree = "<group>";
+		};
+		8D3225DCA2AAEEAC4886DD7B = {
+			isa = PBXGroup;
+			children = (
+				34F71E55134097EC1E3C339E /* SayMark */,
+				B25ACC2425341150EBF2EA17 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		90815DC9B3A49C11B70A4AF4 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				336C65318C2A54C41652517F /* AppConfig.swift */,
+				26CB68B600C2C97B1F527BD7 /* SayMarkApp.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		945726752CDCB6B27D0588EC /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				D555133413D382A2720F3DC3 /* SpeechRecognizer.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		A0AFCDC563DBB6C92E0A64C2 /* Networking */ = {
+			isa = PBXGroup;
+			children = (
+				099E35E2057B6628935FADBA /* APIClient.swift */,
+			);
+			path = Networking;
+			sourceTree = "<group>";
+		};
+		B25ACC2425341150EBF2EA17 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				BB4A4C0AC8816F24E4876B38 /* SayMark.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		CFE8FC6F972EFE4E7D550317 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				FC8E563450A1B027FF2C4603 /* Info.plist */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		C7D04D6F26FC207BA572F9F0 /* SayMark */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 68BBB8F1E86D261B0D7BF81A /* Build configuration list for PBXNativeTarget "SayMark" */;
+			buildPhases = (
+				7DDC7C72B4EBEE48DD2A671C /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = SayMark;
+			packageProductDependencies = (
+			);
+			productName = SayMark;
+			productReference = BB4A4C0AC8816F24E4876B38 /* SayMark.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		B56315E0EE0E91EAC4547930 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+				};
+			};
+			buildConfigurationList = CE040C44EFD0B9EDE8741846 /* Build configuration list for PBXProject "SayMark" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 8D3225DCA2AAEEAC4886DD7B;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = B25ACC2425341150EBF2EA17 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				C7D04D6F26FC207BA572F9F0 /* SayMark */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		7DDC7C72B4EBEE48DD2A671C /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				976E757D0845ED579F33FEE0 /* APIClient.swift in Sources */,
+				077821D4DAD105FC5D55F831 /* APIResponse.swift in Sources */,
+				2825E1D69940380CF9B0D2E6 /* AppConfig.swift in Sources */,
+				93F114A86FD2264DDE7F3364 /* CommandInputView.swift in Sources */,
+				280AF87DA00D24BA0E04BFA0 /* FileDetailView.swift in Sources */,
+				A13B79469543BFFCD8FD1C2E /* FileRowView.swift in Sources */,
+				DA89DC1AEF71CB821D115667 /* Folder.swift in Sources */,
+				3390EA87678E012DA745ACAD /* FolderRowView.swift in Sources */,
+				801032D12F7B05C048103F42 /* FolderTreeView.swift in Sources */,
+				414DB19B05F096E7AF7FDB85 /* FolderTreeViewModel.swift in Sources */,
+				0E64FD8EF3DDA32C87734AF2 /* NewItemSheet.swift in Sources */,
+				138575BC3E0A73D60E058414 /* NoteFile.swift in Sources */,
+				08321E07222430C5E9865953 /* NoteViewModel.swift in Sources */,
+				E3BE218B575B86E0749ADA7E /* RecordNoteView.swift in Sources */,
+				A39DAAB1DE80E554BEB7406A /* RenameSheet.swift in Sources */,
+				9586C12AC4104279C8C1EB77 /* RootView.swift in Sources */,
+				5D3B6DB8204DAEF7EB40E8BF /* SayMarkApp.swift in Sources */,
+				39F89E534DC36A62E2930D57 /* SpeechRecognizer.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		2B281811EEFAAA1C1EA49BA3 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		53138B14ECBA01BF01F38B8D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_LANGUAGE = "zh-Hans";
+				INFOPLIST_FILE = SayMark/Resources/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.saymark.SayMark;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		544B0B85F1E52F6E4538B3CC /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		F5863A5F26D62423D2291F86 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_LANGUAGE = "zh-Hans";
+				INFOPLIST_FILE = SayMark/Resources/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.saymark.SayMark;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		68BBB8F1E86D261B0D7BF81A /* Build configuration list for PBXNativeTarget "SayMark" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				53138B14ECBA01BF01F38B8D /* Debug */,
+				F5863A5F26D62423D2291F86 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		CE040C44EFD0B9EDE8741846 /* Build configuration list for PBXProject "SayMark" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				544B0B85F1E52F6E4538B3CC /* Debug */,
+				2B281811EEFAAA1C1EA49BA3 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = B56315E0EE0E91EAC4547930 /* Project object */;
+}
