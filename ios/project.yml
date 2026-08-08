@@ -9,10 +9,28 @@ targets:
     platform: iOS
     sources:
       - SayMark
+    dependencies:
+      - sdk: Speech.framework
+      - sdk: AVFoundation.framework
     info:
       path: SayMark/Resources/Info.plist
+      properties:
+        CFBundleDisplayName: 语音记事本
+        CFBundleShortVersionString: "1.0"
+        CFBundleVersion: "1"
+        LSRequiresIPhoneOS: true
+        NSMicrophoneUsageDescription: 需要麦克风权限以录制语音记事
+        NSSpeechRecognitionUsageDescription: 需要语音识别权限以将语音转为文字
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+        NSLocationWhenInUseUsageDescription: 需要获取位置以提供基于位置的服务（如估算到目的地距离）
+        NSLocationAlwaysAndWhenInUseUsageDescription: 需要获取位置以提供基于位置的服务
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
     settings:
       base:
         MARKETING_VERSION: "1.0"
         CURRENT_PROJECT_VERSION: "1"
         DEVELOPMENT_LANGUAGE: zh-Hans
+        GENERATE_INFOPLIST_FILE: NO

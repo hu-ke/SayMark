@@ -16,28 +16,44 @@
 		3390EA87678E012DA745ACAD /* FolderRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD61E5389B76681453EA71E2 /* FolderRowView.swift */; };
 		39F89E534DC36A62E2930D57 /* SpeechRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = D555133413D382A2720F3DC3 /* SpeechRecognizer.swift */; };
 		414DB19B05F096E7AF7FDB85 /* FolderTreeViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2F7AEFF0E1C1CF1FBEA0C57 /* FolderTreeViewModel.swift */; };
+		48CE263A8ADF77CE19E82BAC /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A8A17801F3EFFE675F603CE /* ChatView.swift */; };
+		4E96350B519C268FA156AF77 /* ChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BD21175AA5F12E2044D391E /* ChatViewModel.swift */; };
+		52ECBD1481187AE241DCF3DC /* Speech.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7BEA7654F80B00F2E299528E /* Speech.framework */; };
+		5A6BCB2A0F0154D996E98403 /* CalendarEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AEAE6EC4816820E59CB107F /* CalendarEvent.swift */; };
 		5D3B6DB8204DAEF7EB40E8BF /* SayMarkApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26CB68B600C2C97B1F527BD7 /* SayMarkApp.swift */; };
+		63647D2888C466BDA2A54AE7 /* RemindersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10D8ABDA6AA421E724CAFA7A /* RemindersView.swift */; };
+		6A4580CCA890D7AB1E79E0B8 /* DeviceID.swift in Sources */ = {isa = PBXBuildFile; fileRef = 164790EF45F22BF2EE0BDF4C /* DeviceID.swift */; };
+		7A1A43B96E884C8B0CD450F5 /* AVFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A9A25F1E37A1132E151AB815 /* AVFoundation.framework */; };
 		801032D12F7B05C048103F42 /* FolderTreeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43CF3E21C3E5B6A8894B7FCF /* FolderTreeView.swift */; };
 		93F114A86FD2264DDE7F3364 /* CommandInputView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87B8EE13F86150EC6154F854 /* CommandInputView.swift */; };
 		9586C12AC4104279C8C1EB77 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78D535DE97CFB3E5EAD25013 /* RootView.swift */; };
 		976E757D0845ED579F33FEE0 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 099E35E2057B6628935FADBA /* APIClient.swift */; };
+		9D42442C2124ECB19429775A /* CalendarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B59D25B1E1F2199DBDCE880C /* CalendarView.swift */; };
 		A13B79469543BFFCD8FD1C2E /* FileRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF43A400AD413C7D8F99F647 /* FileRowView.swift */; };
 		A39DAAB1DE80E554BEB7406A /* RenameSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD6A795B59A8165D2D98B1C5 /* RenameSheet.swift */; };
+		D2057C01771E6E2AEFE11932 /* LocationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7609482D938B08A69129023D /* LocationManager.swift */; };
 		DA89DC1AEF71CB821D115667 /* Folder.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA85CA260FA3DB7EC67B9F87 /* Folder.swift */; };
-		E3BE218B575B86E0749ADA7E /* RecordNoteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2C8BC0374CAB3479D61F9F9 /* RecordNoteView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		099E35E2057B6628935FADBA /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
+		0AEAE6EC4816820E59CB107F /* CalendarEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarEvent.swift; sourceTree = "<group>"; };
 		0FCDBAACBD2E906F961A3316 /* NewItemSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewItemSheet.swift; sourceTree = "<group>"; };
+		10D8ABDA6AA421E724CAFA7A /* RemindersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemindersView.swift; sourceTree = "<group>"; };
+		164790EF45F22BF2EE0BDF4C /* DeviceID.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceID.swift; sourceTree = "<group>"; };
 		26CB68B600C2C97B1F527BD7 /* SayMarkApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SayMarkApp.swift; sourceTree = "<group>"; };
 		336C65318C2A54C41652517F /* AppConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfig.swift; sourceTree = "<group>"; };
+		3A8A17801F3EFFE675F603CE /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
 		43CF3E21C3E5B6A8894B7FCF /* FolderTreeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolderTreeView.swift; sourceTree = "<group>"; };
 		534CC3857ABACD6BFE3E66D7 /* APIResponse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIResponse.swift; sourceTree = "<group>"; };
+		6BD21175AA5F12E2044D391E /* ChatViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatViewModel.swift; sourceTree = "<group>"; };
+		7609482D938B08A69129023D /* LocationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationManager.swift; sourceTree = "<group>"; };
 		78D535DE97CFB3E5EAD25013 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		7BEA7654F80B00F2E299528E /* Speech.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Speech.framework; path = System/Library/Frameworks/Speech.framework; sourceTree = SDKROOT; };
 		87B8EE13F86150EC6154F854 /* CommandInputView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandInputView.swift; sourceTree = "<group>"; };
+		A9A25F1E37A1132E151AB815 /* AVFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVFoundation.framework; path = System/Library/Frameworks/AVFoundation.framework; sourceTree = SDKROOT; };
+		B59D25B1E1F2199DBDCE880C /* CalendarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarView.swift; sourceTree = "<group>"; };
 		BB4A4C0AC8816F24E4876B38 /* SayMark.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = SayMark.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		C2C8BC0374CAB3479D61F9F9 /* RecordNoteView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordNoteView.swift; sourceTree = "<group>"; };
 		C4E11FF51E485892D46416D5 /* NoteViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteViewModel.swift; sourceTree = "<group>"; };
 		CA85CA260FA3DB7EC67B9F87 /* Folder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Folder.swift; sourceTree = "<group>"; };
 		CD6A795B59A8165D2D98B1C5 /* RenameSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RenameSheet.swift; sourceTree = "<group>"; };
@@ -50,11 +66,24 @@
 		FC8E563450A1B027FF2C4603 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
+/* Begin PBXFrameworksBuildPhase section */
+		94DEAB3960B19AD6A9555EF6 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				52ECBD1481187AE241DCF3DC /* Speech.framework in Frameworks */,
+				7A1A43B96E884C8B0CD450F5 /* AVFoundation.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
 /* Begin PBXGroup section */
 		10867841005AC8DA2F1E2004 /* Models */ = {
 			isa = PBXGroup;
 			children = (
 				534CC3857ABACD6BFE3E66D7 /* APIResponse.swift */,
+				0AEAE6EC4816820E59CB107F /* CalendarEvent.swift */,
 				CA85CA260FA3DB7EC67B9F87 /* Folder.swift */,
 				F6C5D5E150B8A589F5E86285 /* NoteFile.swift */,
 			);
@@ -75,16 +104,27 @@
 			path = SayMark;
 			sourceTree = "<group>";
 		};
+		3FC0DC36286515FD6B2E7695 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				A9A25F1E37A1132E151AB815 /* AVFoundation.framework */,
+				7BEA7654F80B00F2E299528E /* Speech.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		664F6282D8285F39FF6347DE /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				B59D25B1E1F2199DBDCE880C /* CalendarView.swift */,
+				3A8A17801F3EFFE675F603CE /* ChatView.swift */,
 				87B8EE13F86150EC6154F854 /* CommandInputView.swift */,
 				D6E93B02CE6559CB2B99C737 /* FileDetailView.swift */,
 				EF43A400AD413C7D8F99F647 /* FileRowView.swift */,
 				DD61E5389B76681453EA71E2 /* FolderRowView.swift */,
 				43CF3E21C3E5B6A8894B7FCF /* FolderTreeView.swift */,
 				0FCDBAACBD2E906F961A3316 /* NewItemSheet.swift */,
-				C2C8BC0374CAB3479D61F9F9 /* RecordNoteView.swift */,
+				10D8ABDA6AA421E724CAFA7A /* RemindersView.swift */,
 				CD6A795B59A8165D2D98B1C5 /* RenameSheet.swift */,
 				78D535DE97CFB3E5EAD25013 /* RootView.swift */,
 			);
@@ -94,6 +134,7 @@
 		86B6058B6FEF32CDDD57F018 /* ViewModels */ = {
 			isa = PBXGroup;
 			children = (
+				6BD21175AA5F12E2044D391E /* ChatViewModel.swift */,
 				E2F7AEFF0E1C1CF1FBEA0C57 /* FolderTreeViewModel.swift */,
 				C4E11FF51E485892D46416D5 /* NoteViewModel.swift */,
 			);
@@ -104,6 +145,7 @@
 			isa = PBXGroup;
 			children = (
 				34F71E55134097EC1E3C339E /* SayMark */,
+				3FC0DC36286515FD6B2E7695 /* Frameworks */,
 				B25ACC2425341150EBF2EA17 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -120,6 +162,8 @@
 		945726752CDCB6B27D0588EC /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				164790EF45F22BF2EE0BDF4C /* DeviceID.swift */,
+				7609482D938B08A69129023D /* LocationManager.swift */,
 				D555133413D382A2720F3DC3 /* SpeechRecognizer.swift */,
 			);
 			path = Services;
@@ -157,6 +201,7 @@
 			buildConfigurationList = 68BBB8F1E86D261B0D7BF81A /* Build configuration list for PBXNativeTarget "SayMark" */;
 			buildPhases = (
 				7DDC7C72B4EBEE48DD2A671C /* Sources */,
+				94DEAB3960B19AD6A9555EF6 /* Frameworks */,
 			);
 			buildRules = (
 			);
@@ -207,17 +252,23 @@
 				976E757D0845ED579F33FEE0 /* APIClient.swift in Sources */,
 				077821D4DAD105FC5D55F831 /* APIResponse.swift in Sources */,
 				2825E1D69940380CF9B0D2E6 /* AppConfig.swift in Sources */,
+				5A6BCB2A0F0154D996E98403 /* CalendarEvent.swift in Sources */,
+				9D42442C2124ECB19429775A /* CalendarView.swift in Sources */,
+				48CE263A8ADF77CE19E82BAC /* ChatView.swift in Sources */,
+				4E96350B519C268FA156AF77 /* ChatViewModel.swift in Sources */,
 				93F114A86FD2264DDE7F3364 /* CommandInputView.swift in Sources */,
+				6A4580CCA890D7AB1E79E0B8 /* DeviceID.swift in Sources */,
 				280AF87DA00D24BA0E04BFA0 /* FileDetailView.swift in Sources */,
 				A13B79469543BFFCD8FD1C2E /* FileRowView.swift in Sources */,
 				DA89DC1AEF71CB821D115667 /* Folder.swift in Sources */,
 				3390EA87678E012DA745ACAD /* FolderRowView.swift in Sources */,
 				801032D12F7B05C048103F42 /* FolderTreeView.swift in Sources */,
 				414DB19B05F096E7AF7FDB85 /* FolderTreeViewModel.swift in Sources */,
+				D2057C01771E6E2AEFE11932 /* LocationManager.swift in Sources */,
 				0E64FD8EF3DDA32C87734AF2 /* NewItemSheet.swift in Sources */,
 				138575BC3E0A73D60E058414 /* NoteFile.swift in Sources */,
 				08321E07222430C5E9865953 /* NoteViewModel.swift in Sources */,
-				E3BE218B575B86E0749ADA7E /* RecordNoteView.swift in Sources */,
+				63647D2888C466BDA2A54AE7 /* RemindersView.swift in Sources */,
 				A39DAAB1DE80E554BEB7406A /* RenameSheet.swift in Sources */,
 				9586C12AC4104279C8C1EB77 /* RootView.swift in Sources */,
 				5D3B6DB8204DAEF7EB40E8BF /* SayMarkApp.swift in Sources */,
@@ -291,6 +342,7 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_LANGUAGE = "zh-Hans";
+				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = SayMark/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -373,6 +425,7 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_LANGUAGE = "zh-Hans";
+				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = SayMark/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

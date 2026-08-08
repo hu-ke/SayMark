@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from . import database
 from .crud import get_default_uncategorized_folder
-from .routers import ai, files, folders, notes
+from .routers import ai, events, files, folders, geo, notes, reminders, user
 
 
 @asynccontextmanager
@@ -41,6 +41,10 @@ app.include_router(folders.router)
 app.include_router(files.router)
 app.include_router(notes.router)
 app.include_router(ai.router)
+app.include_router(events.router)
+app.include_router(reminders.router)
+app.include_router(geo.router)
+app.include_router(user.router)
 
 
 @app.get("/")

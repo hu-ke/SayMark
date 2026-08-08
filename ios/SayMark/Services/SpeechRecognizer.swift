@@ -4,19 +4,29 @@ import AVFoundation
 import Combine
 
 /// 语音识别器（zh-CN，SFSpeechRecognizer + AVAudioEngine）
+/// 注意：iOS 模拟器对语音识别支持有限，可能无法识别；真机可用。
 @MainActor
 final class SpeechRecognizer: ObservableObject {
     @Published var transcript: String = ""
     @Published var isRecording: Bool = false
     @Published var errorMessage: String?
+    /// 语音识别是否可用（模拟器或未授权时为 false）
+    @Published var isAvailable: Bool = false
 
-    private let speechRecognizer: SFSpeechRecognizer
+    private let speechRecognizer: SFSpeechRecognizer?
     private let audioEngine = AVAudioEngine()
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
 
     init(locale: Locale = Locale(identifier: "zh-CN")) {
+        // 模拟器上 zh-CN 可能返回 nil，不要强解包
         self.speechRecognizer = SFSpeechRecognizer(locale: locale) ?? SFSpeechRecognizer()
+        self.isAvailable = self.speechRecognizer?.isAvailable ?? false
+    }
+
+    deinit {
+        audioEngine.stop()
+        audioEngine.inputNode.removeTap(onBus: 0)
     }
 
     /// 请求语音识别与麦克风权限，返回是否全部授权
@@ -45,8 +55,12 @@ final class SpeechRecognizer: ObservableObject {
     /// 开始录音
     func startRecording() async {
         guard !isRecording else { return }
+        guard let speechRecognizer = speechRecognizer else {
+            self.errorMessage = "语音识别不可用（模拟器可能不支持，请用真机或在下方手动输入）"
+            return
+        }
         guard speechRecognizer.isAvailable else {
-            self.errorMessage = "语音识别不可用"
+            self.errorMessage = "语音识别不可用，请用真机或在下方手动输入"
             return
         }
         let authorized = await requestAuthorization()
@@ -74,6 +88,12 @@ final class SpeechRecognizer: ObservableObject {
 
         let inputNode = audioEngine.inputNode
         let recordingFormat = inputNode.outputFormat(forBus: 0)
+        // 防御：模拟器上 sampleRate 可能为 0，installTap 会 abort
+        guard recordingFormat.sampleRate > 0 else {
+            self.errorMessage = "音频格式无效（模拟器可能不支持录音），请用真机或在下方手动输入"
+            return
+        }
+        inputNode.removeTap(onBus: 0) // 防止重复安装 tap 导致崩溃
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { buffer, _ in
             recognitionRequest.append(buffer)
         }

@@ -29,6 +29,16 @@ struct FolderTreeView: View {
                 .refreshable {
                     await viewModel.loadTree()
                 }
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button {
+                            Task { await viewModel.loadTree() }
+                        } label: {
+                            Image(systemName: "arrow.clockwise")
+                        }
+                        .disabled(viewModel.loading)
+                    }
+                }
             }
         }
         .navigationDestination(for: NoteFile.self) { file in

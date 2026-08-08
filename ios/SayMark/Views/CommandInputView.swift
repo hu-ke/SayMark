@@ -9,13 +9,16 @@ struct CommandInputView: View {
     @State private var resultSuccess: Bool = false
     @State private var isSending = false
     @StateObject private var recognizer = SpeechRecognizer()
+    /// 待确认指令：收到 confirm_required 时暂存 confirmation_id 与提示文案
+    @State private var pendingConfirmationId: String?
+    @State private var pendingConfirmationMessage: String = ""
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 16) {
                 HStack(alignment: .bottom) {
-                    TextField("输入指令，例如：定位到 xxx 文件夹", text: $inputText, axis: .vertical)
+                    TextField("说话或输入文字，例如：明天下午3点面试 / 定位到工作文件夹", text: $inputText, axis: .vertical)
                         .textFieldStyle(.roundedBorder)
                         .lineLimit(1...4)
                     Button {
@@ -32,7 +35,7 @@ struct CommandInputView: View {
                     } label: {
                         Image(systemName: recognizer.isRecording ? "stop.circle.fill" : "mic.fill")
                             .font(.title2)
-                            .foregroundStyle(recognizer.isRecording ? .red : .tint)
+                            .foregroundStyle(recognizer.isRecording ? Color.red : Color.accentColor)
                     }
                 }
                 .padding(.horizontal)
@@ -78,7 +81,7 @@ struct CommandInputView: View {
 
                 Spacer()
             }
-            .navigationTitle("指令")
+            .navigationTitle("语音输入")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -94,6 +97,29 @@ struct CommandInputView: View {
             } message: {
                 Text(recognizer.errorMessage ?? "")
             }
+            .confirmationDialog(
+                "请确认执行",
+                isPresented: Binding(
+                    get: { pendingConfirmationId != nil },
+                    set: { if !$0 { pendingConfirmationId = nil } }
+                ),
+                titleVisibility: .visible
+            ) {
+                Button("确认执行") {
+                    guard let cid = pendingConfirmationId else { return }
+                    pendingConfirmationId = nil
+                    Task { await runConfirmation(id: cid, confirmed: true) }
+                }
+                Button("取消", role: .cancel) {
+                    let cid = pendingConfirmationId
+                    pendingConfirmationId = nil
+                    if let cid = cid {
+                        Task { await runConfirmation(id: cid, confirmed: false) }
+                    }
+                }
+            } message: {
+                Text(pendingConfirmationMessage)
+            }
         }
     }
 
@@ -104,23 +130,52 @@ struct CommandInputView: View {
         defer { isSending = false }
         do {
             let result = try await APIClient.shared.sendCommand(text: text)
-            resultMessage = result.message
-            resultSuccess = result.success
-            if result.success {
-                if result.action == "locate_folder" {
-                    // 读取 data.folder_id 并通知 RootView 定位
-                    if let dict = result.data?.dictionaryValue,
-                       let folderId = dict["folder_id"] as? String {
-                        onSelectFolder(folderId)
-                    }
+            // 需要确认：弹框让用户确认
+            if result.action == "confirm_required" {
+                if let dict = result.data?.dictionaryValue,
+                   let cid = dict["confirmation_id"] as? String {
+                    pendingConfirmationId = cid
+                    pendingConfirmationMessage = result.message
                 } else {
-                    // 变更操作，刷新目录树
-                    await viewModel.loadTree()
+                    resultMessage = result.message
+                    resultSuccess = false
                 }
+                return
             }
+            handleResult(result)
         } catch {
             resultMessage = error.localizedDescription
             resultSuccess = false
+        }
+    }
+
+    private func runConfirmation(id: String, confirmed: Bool) async {
+        isSending = true
+        defer { isSending = false }
+        do {
+            let result = try await APIClient.shared.confirmCommand(
+                confirmationId: id, confirmed: confirmed
+            )
+            handleResult(result)
+        } catch {
+            resultMessage = error.localizedDescription
+            resultSuccess = false
+        }
+    }
+
+    /// 统一处理执行结果（展示文案 + 刷新/定位）
+    private func handleResult(_ result: CommandResult) {
+        resultMessage = result.message
+        resultSuccess = result.success
+        if result.success {
+            if result.action == "locate_folder" {
+                if let dict = result.data?.dictionaryValue,
+                   let folderId = dict["folder_id"] as? String {
+                    onSelectFolder(folderId)
+                }
+            } else {
+                Task { await viewModel.loadTree() }
+            }
         }
     }
 }

@@ -4,6 +4,7 @@
 """
 
 from functools import lru_cache
+from typing import AsyncGenerator
 
 from openai import AsyncOpenAI
 
@@ -39,3 +40,26 @@ async def chat(system_prompt: str, user_prompt: str, temperature: float = 0.7) -
         temperature=temperature,
     )
     return response.choices[0].message.content or ""
+
+
+async def chat_stream(
+    messages: list[dict],
+    temperature: float = 0.7,
+) -> AsyncGenerator[str, None]:
+    """流式调用 Qwen 模型，逐 token yield 文本。
+
+    Args:
+        messages: OpenAI 格式的消息列表 [{"role":"system"|"user"|"assistant", "content":"..."}]
+        temperature: 采样温度
+    """
+    client = _get_client()
+    settings = get_settings()
+    stream = await client.chat.completions.create(
+        model=settings.QWEN_MODEL,
+        messages=messages,
+        temperature=temperature,
+        stream=True,
+    )
+    async for chunk in stream:
+        if chunk.choices and chunk.choices[0].delta.content:
+            yield chunk.choices[0].delta.content

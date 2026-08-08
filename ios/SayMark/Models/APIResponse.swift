@@ -1,12 +1,27 @@
 import Foundation
 
 /// 目录树节点
+/// 后端返回扁平结构：文件夹字段 + children + files 同层。这里提供计算属性 folder 便于视图使用。
 struct TreeNode: Codable, Identifiable, Hashable {
-    let folder: Folder
-    let children: [TreeNode]
-    let files: [NoteFile]
+    let id: String
+    var name: String
+    let parentId: String?
+    let createdAt: String
+    let updatedAt: String
+    var children: [TreeNode]
+    var files: [NoteFile]
 
-    var id: String { folder.id }
+    /// 派生 Folder 对象，保持视图层 node.folder.xxx 用法不变
+    var folder: Folder {
+        Folder(id: id, name: name, parentId: parentId, createdAt: createdAt, updatedAt: updatedAt)
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, children, files
+        case parentId = "parent_id"
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+    }
 }
 
 /// AI 指令返回结果

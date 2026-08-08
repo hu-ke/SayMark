@@ -30,7 +30,7 @@ final class NoteViewModel: ObservableObject {
             if name != note.name {
                 try await api.renameFile(id: note.id, name: name)
             }
-            if content != note.content {
+            if content != (note.content ?? "") {
                 try await api.updateFileContent(id: note.id, content: content)
             }
             await reload()

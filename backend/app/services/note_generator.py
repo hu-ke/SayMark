@@ -55,3 +55,19 @@ async def generate_note_with_title(transcript: str) -> tuple[str, str]:
     if not title:
         title = default_title()
     return title, markdown
+
+
+# 笔记合并系统提示词（补充内容到已有笔记）
+MERGE_SYSTEM_PROMPT = (
+    "你是笔记整理助手。下面给出一份已有的 markdown 笔记和用户想补充的新内容。"
+    "请把新内容合并进笔记，保留原有内容不丢失，保持 markdown 格式与标题。"
+    "如果新内容与已有条目重复，可合并；如果是新的时间/事项，按合理顺序插入。"
+    "只输出更新后的完整 markdown，不要解释。"
+)
+
+
+async def merge_note(existing_markdown: str, new_content: str) -> str:
+    """把新内容合并到已有 markdown 笔记，返回更新后的完整 markdown。"""
+    user_prompt = f"已有笔记：\n{existing_markdown}\n\n补充内容：\n{new_content}"
+    markdown = await qwen.chat(MERGE_SYSTEM_PROMPT, user_prompt, temperature=0.7)
+    return markdown.strip()

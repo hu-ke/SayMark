@@ -42,6 +42,51 @@ class NoteCreate(BaseModel):
 
 class CommandRequest(BaseModel):
     text: str
+    target_file_id: str | None = None  # 可选：当前编辑的目标文件 id（从笔记详情页发起的语音编辑）
+
+
+class ConfirmRequest(BaseModel):
+    confirmation_id: str
+    confirmed: bool = True  # true=执行, false=取消
+
+
+class ChatRequest(BaseModel):
+    text: str
+    conversation_id: str = ""  # 新会话传空字符串
+    latitude: float | None = None   # 用户当前纬度
+    longitude: float | None = None  # 用户当前经度
+    device_id: str = ""  # 设备标识，用于关联用户 Profile
+
+
+# ----------------------------- 用户 Profile -----------------------------
+
+
+class UserPlace(BaseModel):
+    name: str
+    lat: float
+    lon: float
+
+
+class UserProfileResponse(BaseModel):
+    id: str
+    device_id: str
+    latitude: float | None = None
+    longitude: float | None = None
+    home_address: str = ""
+    places: list[UserPlace] = []
+    created_at: str = ""
+    updated_at: str = ""
+
+
+class UpdateLocationRequest(BaseModel):
+    latitude: float
+    longitude: float
+
+
+class AddPlaceRequest(BaseModel):
+    name: str
+    lat: float
+    lon: float
 
 
 # ----------------------------- 响应模型 -----------------------------
@@ -61,6 +106,11 @@ class FileMetaResponse(BaseModel):
     id: str
     name: str
     parent_id: str
+    type: str = "note"  # "note" 或 "event"
+    date: str = ""      # 仅 event 类型有值 YYYY-MM-DD
+    time: str = ""      # 仅 event 类型有值 HH:MM
+    reminder_minutes: Optional[int] = None  # 提前多少分钟提醒，None 表示无提醒
+    recurrence: Optional[str] = None  # 周期：null/""=一次性，"daily"/"weekly"/"monthly"
     created_at: str
     updated_at: str
 
@@ -72,8 +122,20 @@ class FileResponse(BaseModel):
     name: str
     content: str
     parent_id: str
+    type: str = "note"
+    date: str = ""
+    time: str = ""
+    reminder_minutes: Optional[int] = None
+    recurrence: Optional[str] = None
     created_at: str
     updated_at: str
+
+
+class MonthSummaryItem(BaseModel):
+    """某日日程数量（用于日历标记）。"""
+
+    date: str
+    count: int
 
 
 class FolderTreeNode(BaseModel):

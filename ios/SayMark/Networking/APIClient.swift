@@ -86,7 +86,7 @@ final class APIClient {
     }
 
     /// 请求无返回体
-    private func requestEmpty(
+    func requestEmpty(
         path: String,
         method: String,
         body: Encodable? = nil
@@ -115,7 +115,7 @@ final class APIClient {
 
     func renameFolder(id: String, name: String) async throws {
         struct Body: Encodable { let name: String }
-        try await requestEmpty(path: "/api/folders/\(id)", method: "PUT", body: Body(name: name))
+        try await requestEmpty(path: "/api/folders/\(id)", method: "PATCH", body: Body(name: name))
     }
 
     func deleteFolder(id: String) async throws {
@@ -138,12 +138,12 @@ final class APIClient {
 
     func renameFile(id: String, name: String?) async throws {
         struct Body: Encodable { let name: String? }
-        try await requestEmpty(path: "/api/files/\(id)", method: "PUT", body: Body(name: name))
+        try await requestEmpty(path: "/api/files/\(id)", method: "PATCH", body: Body(name: name))
     }
 
     func updateFileContent(id: String, content: String) async throws {
         struct Body: Encodable { let content: String }
-        try await requestEmpty(path: "/api/files/\(id)/content", method: "PUT",
+        try await requestEmpty(path: "/api/files/\(id)", method: "PATCH",
                                body: Body(content: content))
     }
 
@@ -153,7 +153,7 @@ final class APIClient {
 
     func moveFile(id: String, targetFolderId: String) async throws {
         struct Body: Encodable { let target_folder_id: String }
-        try await requestEmpty(path: "/api/files/\(id)/move", method: "POST",
+        try await requestEmpty(path: "/api/files/\(id)/move", method: "PUT",
                                body: Body(target_folder_id: targetFolderId))
     }
 
@@ -169,9 +169,51 @@ final class APIClient {
     }
 
     /// 发送 AI 指令（POST /api/ai/command）
-    func sendCommand(text: String) async throws -> CommandResult {
-        struct Body: Encodable { let text: String }
-        return try await request(path: "/api/ai/command", method: "POST", body: Body(text: text))
+    func sendCommand(text: String, targetFileId: String? = nil) async throws -> CommandResult {
+        struct Body: Encodable {
+            let text: String
+            let target_file_id: String?
+        }
+        return try await request(path: "/api/ai/command", method: "POST", body: Body(text: text, target_file_id: targetFileId))
+    }
+
+    /// 确认/取消待确认指令（POST /api/ai/command/confirm）
+    func confirmCommand(confirmationId: String, confirmed: Bool) async throws -> CommandResult {
+        struct Body: Encodable {
+            let confirmation_id: String
+            let confirmed: Bool
+        }
+        return try await request(path: "/api/ai/command/confirm", method: "POST",
+                                 body: Body(confirmation_id: confirmationId, confirmed: confirmed))
+    }
+
+    // MARK: - 日程（Events）
+
+    /// 获取某月有日程的日期（GET /api/events/month/{year}/{month}）
+    func getMonthSummary(year: Int, month: Int) async throws -> [MonthSummaryItem] {
+        try await request(path: "/api/events/month/\(year)/\(month)", method: "GET")
+    }
+
+    /// 获取某天的所有日程（GET /api/events/date/{date}）
+    func getEventsByDate(_ date: String) async throws -> [CalendarEvent] {
+        try await request(path: "/api/events/date/\(date)", method: "GET")
+    }
+
+    /// 删除日程（DELETE /api/events/{id}）
+    func deleteEvent(id: String) async throws {
+        try await requestEmpty(path: "/api/events/\(id)", method: "DELETE")
+    }
+
+    // MARK: - 提醒（Reminders）
+
+    /// 获取所有带提醒的日程（GET /api/reminders）
+    func getReminders() async throws -> [CalendarEvent] {
+        try await request(path: "/api/reminders", method: "GET")
+    }
+
+    /// 取消提醒（PATCH /api/reminders/{id}）
+    func cancelReminder(id: String) async throws {
+        try await requestEmpty(path: "/api/reminders/\(id)", method: "PATCH")
     }
 }
 
