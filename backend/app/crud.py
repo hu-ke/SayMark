@@ -61,6 +61,7 @@ def _serialize_file(doc: Optional[dict], include_content: bool = True) -> Option
         "time": doc.get("time", ""),      # 仅 event 类型有值 HH:MM
         "reminder_minutes": doc.get("reminder_minutes"),  # 提前多少分钟提醒，None 表示无提醒
         "recurrence": doc.get("recurrence"),              # null/""=一次性，"daily"/"weekly"/"monthly"
+        "recurrence_end_date": doc.get("recurrence_end_date", ""),  # 周期结束日期 YYYY-MM-DD，空表示无限
         "created_at": _dt_iso(doc.get("created_at")),
         "updated_at": _dt_iso(doc.get("updated_at")),
     }
@@ -454,8 +455,8 @@ async def find_files_by_month(year: int, month: int) -> list[dict]:
 # ----------------------------- 提醒 ------------------------------
 
 
-async def set_reminder(file_id: str, minutes: int, recurrence: str = "") -> Optional[dict]:
-    """为文件设置提醒。minutes=0 取消提醒。recurrence: ""=一次性, "daily"/"weekly"/"monthly"。"""
+async def set_reminder(file_id: str, minutes: int, recurrence: str = "", recurrence_end_date: str = "") -> Optional[dict]:
+    """为文件设置提醒。minutes=0 取消提醒。recurrence: ""=一次性, "daily"/"weekly"/"monthly"。recurrence_end_date: 结束日期。"""
     db = get_db()
     if minutes > 0:
         set_fields: dict = {"reminder_minutes": minutes, "updated_at": _now()}
@@ -463,9 +464,13 @@ async def set_reminder(file_id: str, minutes: int, recurrence: str = "") -> Opti
             set_fields["recurrence"] = recurrence
         else:
             set_fields["recurrence"] = None
+        if recurrence_end_date:
+            set_fields["recurrence_end_date"] = recurrence_end_date
+        else:
+            set_fields["recurrence_end_date"] = None
         update = {"$set": set_fields}
     else:
-        update = {"$unset": {"reminder_minutes": "", "recurrence": ""}, "$set": {"updated_at": _now()}}
+        update = {"$unset": {"reminder_minutes": "", "recurrence": "", "recurrence_end_date": ""}, "$set": {"updated_at": _now()}}
     res = await db.files.update_one({"_id": _to_objectid(file_id)}, update)
     if res.matched_count == 0:
         return None

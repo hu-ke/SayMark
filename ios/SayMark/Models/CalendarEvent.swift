@@ -11,13 +11,16 @@ struct CalendarEvent: Codable, Identifiable, Hashable {
     let parentId: String   // 所在文件夹 id
     let reminderMinutes: Int?  // 提前多少分钟提醒
     let recurrence: String?    // 周期
+    let recurrenceEndDate: String  // 周期结束日期
     let createdAt: String
+    let updatedAt: String
 
     enum CodingKeys: String, CodingKey {
         case id, name, date, time, content, type
         case parentId = "parent_id"
         case reminderMinutes = "reminder_minutes"
         case recurrence
+        case recurrenceEndDate = "recurrence_end_date"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
     }

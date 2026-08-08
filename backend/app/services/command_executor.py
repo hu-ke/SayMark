@@ -252,6 +252,7 @@ async def _handle_set_reminder(parsed: dict) -> dict:
     name = parsed.get("name")
     minutes = parsed.get("minutes")
     recurrence = parsed.get("recurrence", "") or ""
+    recurrence_end_date = parsed.get("recurrence_end_date", "") or ""
 
     if minutes is None:
         return _result("set_reminder", False, "缺少 minutes（提前多少分钟）")
@@ -285,9 +286,11 @@ async def _handle_set_reminder(parsed: dict) -> dict:
             return _result("set_reminder", False, f"找到多条「{name}」，请明确指定")
         target_id = matches[0]["id"]
 
-    updated = await crud.set_reminder(target_id, minutes, recurrence)
+    updated = await crud.set_reminder(target_id, minutes, recurrence, recurrence_end_date)
     rc_label = {"daily": "每天", "weekly": "每周", "monthly": "每月"}.get(recurrence, "")
     label = f"已设置{'「' + rc_label + '」' if rc_label else ''}提前 {minutes} 分钟提醒"
+    if recurrence_end_date:
+        label += f"（至{recurrence_end_date}）"
     if minutes == 0:
         label = "已取消提醒"
     return _result("set_reminder", True, label, updated)

@@ -126,6 +126,10 @@ final class RemindersViewModel: ObservableObject {
         loading = true
         do {
             reminders = try await api.getReminders()
+            // 同步到本地通知
+            if let notes = try? await api.getReminderNotes() {
+                await NotificationManager.shared.scheduleNotifications(from: notes)
+            }
         } catch {
             reminders = []
         }
@@ -136,6 +140,10 @@ final class RemindersViewModel: ObservableObject {
         do {
             try await api.cancelReminder(id: id)
             reminders.removeAll { $0.id == id }
+            // 重新同步本地通知
+            if let notes = try? await api.getReminderNotes() {
+                await NotificationManager.shared.scheduleNotifications(from: notes)
+            }
         } catch {}
     }
 }

@@ -5,6 +5,7 @@
 
 import json
 import uuid
+from datetime import datetime
 
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
@@ -29,9 +30,12 @@ _CONFIRM_STEP_THRESHOLD = 3
 # 聊天系统提示词
 _CHAT_SYSTEM_PROMPT = (
     "你是 SayMark 语音记事本助手。帮助用户管理笔记、日程、文件夹。\n"
+    "现在是：{current_time}\n"
     "注意：当对话历史中出现「[已执行] xxx」的系统消息时，表示该操作已经真实完成（笔记已写入、日程已创建、文件已删除等），"
     "你需要根据这个结果自然地回复用户，而不是说「我可以帮你」或再次尝试执行。\n"
     "当出现「[执行失败] xxx」时，如实告知用户操作未成功及原因。\n"
+    "当出现「[需确认] xxx」时，表示该操作需要用户二次确认（如删除等不可逆操作），"
+    "请告知用户该操作需要在主界面指令模式中确认后才能执行，不要在聊天中假装已执行。\n"
     "当出现「[位置] 用户当前在：xxx（坐标）」时，你已知用户的真实位置。关于地点、距离、通勤的问题，"
     "请基于此坐标判断，使用 Haversine 公式估算直线距离（地球半径6371km），不要凭空编造距离和时间。"
     "如果没有位置信息，不要假装知道用户在哪。\n"
@@ -155,7 +159,7 @@ async def chat_stream(body: ChatRequest):
         conv_id = uuid.uuid4().hex
 
     if conv_id not in _conversations:
-        _conversations[conv_id] = [{"role": "system", "content": _CHAT_SYSTEM_PROMPT}]
+        _conversations[conv_id] = [{"role": "system", "content": _CHAT_SYSTEM_PROMPT.format(current_time=datetime.now().strftime("%Y年%m月%d日 %H:%M"))}]
 
     history = _conversations[conv_id]
 
@@ -182,6 +186,10 @@ async def chat_stream(body: ChatRequest):
                 execution_note = f"[已执行] {msg}{detail}"
             else:
                 execution_note = f"[执行失败] {msg}"
+        elif steps and needs_confirm:
+            # 有步骤但需要确认（如删除操作），注入提示让 AI 告知用户
+            summary = parsed.get("summary", "")
+            execution_note = f"[需确认] {summary}，请在主界面指令模式中确认后执行"
     except Exception:
         pass  # 非指令文本，走正常聊天
 
@@ -228,6 +236,15 @@ async def chat_stream(body: ChatRequest):
 
     async def event_stream():
         yield f"data: {json.dumps({'conversation_id': conv_id})}\n\n"
+        # 如果有执行结果，作为「思考过程」先发给前端
+        if execution_note:
+            if execution_note.startswith("[需确认]"):
+                thinking_text = execution_note.removeprefix("[需确认] ")
+                yield f"data: {json.dumps({'thinking': f'⚠️ 需要确认：{thinking_text}'})}\n\n"
+            else:
+                thinking_text = execution_note.removeprefix("[已执行] ").removeprefix("[执行失败] ")
+                prefix = "✅ 已执行" if execution_note.startswith("[已执行]") else "❌ 执行失败"
+                yield f"data: {json.dumps({'thinking': f'{prefix}：{thinking_text}'})}\n\n"
         try:
             full_response = ""
             async for token in qwen.chat_stream(messages, temperature=0.7):

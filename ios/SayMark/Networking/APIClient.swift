@@ -211,6 +211,11 @@ final class APIClient {
         try await request(path: "/api/reminders", method: "GET")
     }
 
+    /// 获取所有提醒（返回 NoteFile 列表，用于通知调度）
+    func getReminderNotes() async throws -> [NoteFile] {
+        try await request(path: "/api/reminders", method: "GET")
+    }
+
     /// 取消提醒（PATCH /api/reminders/{id}）
     func cancelReminder(id: String) async throws {
         try await requestEmpty(path: "/api/reminders/\(id)", method: "PATCH")

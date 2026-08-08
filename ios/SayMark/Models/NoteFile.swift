@@ -12,12 +12,15 @@ struct NoteFile: Codable, Identifiable, Hashable {
     let time: String  // HH:MM，仅 event 类型有值
     let reminderMinutes: Int?  // 提前多少分钟提醒，nil 表示无提醒
     let recurrence: String?    // null/""=一次性，"daily"/"weekly"/"monthly"
+    let recurrenceEndDate: String  // 周期结束日期 YYYY-MM-DD，空=无限
     let createdAt: String
+    let updatedAt: String
 
     enum CodingKeys: String, CodingKey {
         case id, name, content, type, date, time
         case reminderMinutes = "reminder_minutes"
         case recurrence
+        case recurrenceEndDate = "recurrence_end_date"
         case parentId = "parent_id"
         case createdAt = "created_at"
         case updatedAt = "updated_at"

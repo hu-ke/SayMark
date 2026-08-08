@@ -24,7 +24,7 @@ _SYSTEM_PROMPT_TEMPLATE = (
     "- create_note: 新建笔记（无明确时间/日期的备忘）。参数 content(备忘原文), target_folder_id?(可选目录 id；缺省「未分类」), target_folder?(用户提到的目录名，兜底用)\n"
     "- create_event: 新建日程（有明确时间/日期的安排）。参数 title(日程标题), date(日期 YYYY-MM-DD), time(时间 HH:MM，缺省空), content(日程详情), target_folder_id?(可选目录 id), target_folder?(用户提到的目录名，兜底用)。当用户说「安排/预定/约了/XX点XX分/下周一/明天/X月X号」并且涉及具体时间点时用此 action\n"
     "- append_note: 补充/追加内容到已有笔记或日程。参数 target_id(要补充的文件 id), name(用户提到的文件名，兜底用), content(要补充的新内容)。当用户说「补充/加上/添加到XX」时用此 action\n"
-    "- set_reminder: 为日程设置提醒。参数 target_id(日程文件 id), name(日程名称，兜底用), minutes(提前多少分钟提醒，数字), recurrence(周期：空=一次性, daily=每天, weekly=每周, monthly=每月)。当用户说「提前XX分钟提醒」「每天提醒」「每周X提醒」时用此 action\n"
+    "- set_reminder: 为日程设置提醒。参数 target_id(日程文件 id), name(日程名称，兜底用), minutes(提前多少分钟提醒，0=取消提醒), recurrence(周期：空=一次性, daily=每天, weekly=每周, monthly=每月), recurrence_end_date(周期结束日期 YYYY-MM-DD，如「到10月第一周」需换算为该周周一的日期)。当用户说「提前XX分钟提醒」「每天提醒」「每周X提醒」「到X月X号为止」时用此 action\n"
     "- save_place: 保存用户提到的地点到个人地名库。参数 name(地名), lat(纬度数字), lon(经度数字)。当用户说「我在XX」「我家在XX」且你想记住这个地点时用此 action。注意：地名不知道坐标的话凭知识估算大致坐标。\n"
     "- create_folder: 创建文件夹。参数 name, parent_folder_id?(可选父目录 id，缺省顶级), parent_folder?(用户提到的父目录名，兜底用)\n"
     "- rename: 重命名。参数 type(file|folder), target_id(要改的项的 id；找不到留空\"\"), name(用户提到的原名，兜底用), new_name\n"
@@ -64,7 +64,12 @@ _SYSTEM_PROMPT_TEMPLATE = (
     "10. summary：简明概括计划执行的操作，供用户确认用。\n"
     "11. **时间语义匹配**：当用户用「昨天/今天/前天/大前天/上周/本月/X月X号/X月X日」等时间词指代笔记时，必须根据每行后面的「创建时间」判断该项的创建日期是否符合，**不要**用名称去匹配时间词。例如「删掉昨天的笔记」应删除创建时间在昨天的所有文件，而非名称含「昨天」的文件。涉及多条笔记时需设为多步骤（每条一个 delete），且 needs_confirmation=true。\n"
     "12. 每个 action 对象的参数直接平铺在对象中（如 {{\"action\":\"create_note\",\"content\":\"...\"}}），不要嵌套在 parameters 子对象里。\n"
-    "13. 只输出 JSON 对象，不要 markdown 代码块，不要解释。"
+    "13. **新建日程+提醒**：当用户描述一个全新的日程且要求提醒时（如「每天中午12点网课提前3分钟通知」），必须分两步：\n"
+    "   步骤1: create_event（title=网课, date=今天或首次发生日期, time=12:00, content=用户原文）\n"
+    "   步骤2: set_reminder(name=网课, minutes=3, recurrence=daily/weekly/... , recurrence_end_date=如有结束日期则填)\n"
+    "   对于没有具体日期的周期日程（如「每天…」），date 填今天（YYYY-MM-DD）。步骤2 的 target_id 留空，用 name 引用步骤1 创建的名称。\n"
+    "   判断标准：目录树中不存在同名日程 + 用户提到了提醒相关词（通知/提醒/和我说/提前），就必须用 create_event + set_reminder 两步！\n"
+    "14. 只输出 JSON 对象，不要 markdown 代码块，不要解释。"
 )
 
 
@@ -165,6 +170,13 @@ async def parse_command(text: str, target_file_id: str | None = None) -> dict:
     data["steps"] = _normalize_steps(data.get("steps", []))
     data.setdefault("needs_confirmation", False)
     data.setdefault("summary", "")
+
+    # 删除操作强制要求二次确认，不依赖 LLM 自觉
+    if any(step.get("action") == "delete" for step in data["steps"]):
+        data["needs_confirmation"] = True
+        if not data["summary"]:
+            data["summary"] = "计划执行删除操作"
+
     return data
 
 

@@ -33,6 +33,7 @@
 		A39DAAB1DE80E554BEB7406A /* RenameSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD6A795B59A8165D2D98B1C5 /* RenameSheet.swift */; };
 		D2057C01771E6E2AEFE11932 /* LocationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7609482D938B08A69129023D /* LocationManager.swift */; };
 		DA89DC1AEF71CB821D115667 /* Folder.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA85CA260FA3DB7EC67B9F87 /* Folder.swift */; };
+		DEC9C7851A56D5466A88FC00 /* NotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81F00714D23B58052A7F06BD /* NotificationManager.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -50,6 +51,7 @@
 		7609482D938B08A69129023D /* LocationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationManager.swift; sourceTree = "<group>"; };
 		78D535DE97CFB3E5EAD25013 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		7BEA7654F80B00F2E299528E /* Speech.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Speech.framework; path = System/Library/Frameworks/Speech.framework; sourceTree = SDKROOT; };
+		81F00714D23B58052A7F06BD /* NotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationManager.swift; sourceTree = "<group>"; };
 		87B8EE13F86150EC6154F854 /* CommandInputView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandInputView.swift; sourceTree = "<group>"; };
 		A9A25F1E37A1132E151AB815 /* AVFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVFoundation.framework; path = System/Library/Frameworks/AVFoundation.framework; sourceTree = SDKROOT; };
 		B59D25B1E1F2199DBDCE880C /* CalendarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarView.swift; sourceTree = "<group>"; };
@@ -164,6 +166,7 @@
 			children = (
 				164790EF45F22BF2EE0BDF4C /* DeviceID.swift */,
 				7609482D938B08A69129023D /* LocationManager.swift */,
+				81F00714D23B58052A7F06BD /* NotificationManager.swift */,
 				D555133413D382A2720F3DC3 /* SpeechRecognizer.swift */,
 			);
 			path = Services;
@@ -268,6 +271,7 @@
 				0E64FD8EF3DDA32C87734AF2 /* NewItemSheet.swift in Sources */,
 				138575BC3E0A73D60E058414 /* NoteFile.swift in Sources */,
 				08321E07222430C5E9865953 /* NoteViewModel.swift in Sources */,
+				DEC9C7851A56D5466A88FC00 /* NotificationManager.swift in Sources */,
 				63647D2888C466BDA2A54AE7 /* RemindersView.swift in Sources */,
 				A39DAAB1DE80E554BEB7406A /* RenameSheet.swift in Sources */,
 				9586C12AC4104279C8C1EB77 /* RootView.swift in Sources */,

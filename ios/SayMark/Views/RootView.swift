@@ -3,70 +3,98 @@ import SwiftUI
 struct RootView: View {
     @StateObject private var viewModel = FolderTreeViewModel()
     @State private var showNewItem = false
-    @State private var showVoiceInput = false
     @State private var locateFolderId: String?
     @State private var selectedTab = 0
 
+    // 聊天抽屉
+    @State private var showChat = false
+
     var body: some View {
-        TabView(selection: $selectedTab) {
-            NavigationStack {
-                FolderTreeView(viewModel: viewModel, locateFolderId: $locateFolderId)
-                    .navigationTitle("语音记事本")
-                    .toolbar {
-                        ToolbarItemGroup(placement: .navigationBarTrailing) {
-                            // 语音输入按钮
-                            Button {
-                                showVoiceInput = true
-                            } label: {
-                                Image(systemName: "mic")
-                            }
-                            // 新建按钮
-                            Button {
-                                showNewItem = true
-                            } label: {
-                                Image(systemName: "plus")
+        ZStack {
+            // 主 TabView
+            TabView(selection: $selectedTab) {
+                NavigationStack {
+                    FolderTreeView(viewModel: viewModel, locateFolderId: $locateFolderId)
+                        .navigationTitle("语音记事本")
+                        .toolbar {
+                            ToolbarItemGroup(placement: .navigationBarTrailing) {
+                                Button {
+                                    showNewItem = true
+                                } label: {
+                                    Image(systemName: "plus")
+                                }
                             }
                         }
+                        .sheet(isPresented: $showNewItem) {
+                            NewItemSheet(viewModel: viewModel, parentId: nil)
+                        }
+                }
+                .tabItem {
+                    Label("文件", systemImage: "folder")
+                }
+                .tag(0)
+
+                CalendarView(treeViewModel: viewModel)
+                    .tabItem {
+                        Label("日历", systemImage: "calendar")
                     }
-                    .sheet(isPresented: $showNewItem) {
-                        NewItemSheet(viewModel: viewModel, parentId: nil)
+                    .tag(1)
+
+                RemindersView()
+                    .tabItem {
+                        Label("提醒", systemImage: "bell")
                     }
-                    .sheet(isPresented: $showVoiceInput) {
-                        CommandInputView(viewModel: viewModel, onSelectFolder: { folderId in
-                            locateFolderId = folderId
-                            viewModel.locate(folderId: folderId)
-                        })
-                    }
+                    .tag(2)
             }
-            .tabItem {
-                Label("文件", systemImage: "folder")
+
+            // 半透明遮罩
+            if showChat {
+                Color.black.opacity(0.3)
+                    .ignoresSafeArea()
+                    .onTapGesture { dismissChat() }
+                    .transition(.opacity)
             }
-            .tag(0)
 
-            CalendarView(treeViewModel: viewModel)
-                .tabItem {
-                    Label("日历", systemImage: "calendar")
+            // 聊天抽屉（全屏，从右侧滑入）
+            GeometryReader { geometry in
+                HStack(spacing: 0) {
+                    Spacer()
+                    ChatView()
+                        .frame(width: geometry.size.width)
+                        .background(Color(.systemBackground))
+                        .offset(x: showChat ? 0 : geometry.size.width)
+                        .gesture(
+                            DragGesture(minimumDistance: 20)
+                                .onEnded { value in
+                                    if value.translation.width > 60 {
+                                        dismissChat()
+                                    }
+                                }
+                        )
                 }
-                .tag(1)
+            }
+            .ignoresSafeArea()
+            .animation(.spring(response: 0.35, dampingFraction: 0.85), value: showChat)
 
-            RemindersView()
-                .tabItem {
-                    Label("提醒", systemImage: "bell")
+            // 底部中间聊天按钮
+            VStack {
+                Spacer()
+                Button {
+                    showChat = true
+                } label: {
+                    Image(systemName: "bubble.left.and.bubble.right.fill")
+                        .font(.title3)
+                        .foregroundStyle(.white)
+                        .padding(14)
+                        .background(Circle().fill(Color.accentColor).shadow(radius: 4))
                 }
-                .tag(2)
-
-            ChatView()
-                .tabItem {
-                    Label("聊天", systemImage: "bubble.left.and.bubble.right")
-                }
-                .tag(3)
+                .padding(.bottom, 74)  // TabBar 上方
+            }
         }
         .task {
             await viewModel.loadTree()
             LocationManager.shared.requestLocation()
-            // 异步同步位置到后端用户 Profile
             Task {
-                // 等位置获取完成（最多等 3 秒）
                 for _ in 0..<30 {
                     if let lat = LocationManager.shared.latitude,
                        let lon = LocationManager.shared.longitude {
@@ -80,6 +108,18 @@ struct RootView: View {
                     try? await Task.sleep(nanoseconds: 100_000_000)
                 }
             }
+            let granted = await NotificationManager.shared.requestPermission()
+            if granted {
+                if let notes = try? await APIClient.shared.getReminderNotes() {
+                    await NotificationManager.shared.scheduleNotifications(from: notes)
+                }
+            }
+        }
+    }
+
+    private func dismissChat() {
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+            showChat = false
         }
     }
 }

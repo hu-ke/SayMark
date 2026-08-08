@@ -109,8 +109,9 @@ class FileMetaResponse(BaseModel):
     type: str = "note"  # "note" 或 "event"
     date: str = ""      # 仅 event 类型有值 YYYY-MM-DD
     time: str = ""      # 仅 event 类型有值 HH:MM
-    reminder_minutes: Optional[int] = None  # 提前多少分钟提醒，None 表示无提醒
-    recurrence: Optional[str] = None  # 周期：null/""=一次性，"daily"/"weekly"/"monthly"
+    reminder_minutes: Optional[int] = None
+    recurrence: Optional[str] = None  # null/""=一次性，"daily"/"weekly"/"monthly"
+    recurrence_end_date: str = ""     # 周期结束日期 YYYY-MM-DD，空=无限
     created_at: str
     updated_at: str
 
@@ -127,6 +128,7 @@ class FileResponse(BaseModel):
     time: str = ""
     reminder_minutes: Optional[int] = None
     recurrence: Optional[str] = None
+    recurrence_end_date: str = ""
     created_at: str
     updated_at: str
 
