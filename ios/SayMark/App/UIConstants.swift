@@ -30,46 +30,122 @@ enum UIConstants {
 // MARK: - TabBar
 struct SayMarkTabBar: View {
     @Binding var selectedTab: Int
+    var onRecordStart: () -> Void = {}
+    var onRecordChanged: ((RecZone) -> Void)? = nil
+    var onRecordEnd: ((RecZone) -> Void)? = nil
 
     private let tabs: [(String, String)] = [
         ("doc", "文件"),
         ("cal", "日历"),
         ("bell", "提醒"),
+        ("gear", "设置"),
     ]
 
+    @State private var isRecording = false
+    @State private var dragOffset: CGSize = .zero
+    @State private var currentZone: RecZone = .normal
+
     var body: some View {
-        VStack(spacing: 0) {
-            HDSeparator()
-            HStack(spacing: 0) {
-                ForEach(0..<tabs.count, id: \.self) { i in
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.15)) {
-                            selectedTab = i
-                        }
-                    } label: {
-                        VStack(spacing: 3) {
-                            TabIcon(
-                                type: tabs[i].0,
-                                size: 26,
-                                color: selectedTab == i ? UIConstants.blue : UIConstants.label3,
-                                strokeWidth: selectedTab == i ? 2 : 1.6
-                            )
-                            Text(tabs[i].1)
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundColor(selectedTab == i ? UIConstants.blue : UIConstants.label3)
+        ZStack(alignment: .top) {
+            VStack(spacing: 0) {
+                HDSeparator()
+                HStack(spacing: 0) {
+                    // 文件
+                    tabButton(index: 0)
+                    // 日历
+                    tabButton(index: 1)
+                    // FAB 占位
+                    Color.clear.frame(width: 56)
+                    // 提醒
+                    tabButton(index: 2)
+                    // 设置
+                    tabButton(index: 3)
+                }
+                .padding(.top, 9)
+                .frame(maxHeight: .infinity, alignment: .top)
+            }
+
+            // 居中突出的话筒 FAB（长按录音 + 拖拽切区）
+            ZStack {
+                Circle()
+                    .fill(currentZone == .cancel ? UIConstants.red :
+                           currentZone == .text ? UIConstants.green : UIConstants.blue)
+                    .frame(width: 56, height: 56)
+                    .shadow(color: (currentZone == .cancel ? UIConstants.red :
+                                     currentZone == .text ? UIConstants.green : UIConstants.blue).opacity(0.45), radius: 10, y: 4)
+                Image(systemName: "mic.fill")
+                    .font(.system(size: 28))
+                    .foregroundColor(.white)
+            }
+            .offset(y: -28)
+            .frame(maxWidth: .infinity)
+            .gesture(
+                LongPressGesture(minimumDuration: 0.5)
+                    .sequenced(before: DragGesture(minimumDistance: 0))
+                    .onChanged { value in
+                        switch value {
+                        case .second(true, let drag):
+                            if !isRecording {
+                                isRecording = true
+                                currentZone = .normal
+                                onRecordStart()
+                            }
+                            if let drag = drag {
+                                let h = drag.translation.height
+                                let w = drag.translation.width
+                                if h < -30 && w < -30 {
+                                    updateZone(.cancel)
+                                } else if h < -30 && w > 30 {
+                                    updateZone(.text)
+                                } else {
+                                    updateZone(.normal)
+                                }
+                            }
+                        default:
+                            break
                         }
                     }
-                    .frame(maxWidth: .infinity)
-                }
-            }
-            .padding(.top, 9)
-            .frame(maxHeight: .infinity, alignment: .top)
+                    .onEnded { _ in
+                        if isRecording {
+                            isRecording = false
+                            onRecordEnd?(currentZone)
+                            currentZone = .normal
+                        }
+                    }
+            )
         }
         .frame(height: 83)
         .background(
             Color(red: 0.973, green: 0.973, blue: 0.973, opacity: 0.94)
                 .background(Material.ultraThin)
         )
+    }
+
+    private func tabButton(index: Int) -> some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.15)) {
+                selectedTab = index
+            }
+        } label: {
+            VStack(spacing: 3) {
+                TabIcon(
+                    type: tabs[index].0,
+                    size: 26,
+                    color: selectedTab == index ? UIConstants.blue : UIConstants.label3,
+                    strokeWidth: selectedTab == index ? 2 : 1.6
+                )
+                Text(tabs[index].1)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(selectedTab == index ? UIConstants.blue : UIConstants.label3)
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func updateZone(_ zone: RecZone) {
+        guard zone != currentZone else { return }
+        currentZone = zone
+        onRecordChanged?(zone)
     }
 }
 
@@ -89,9 +165,10 @@ struct TabIcon: View {
             case "bell-off": BellOffIcon()
             case "folder": FolderIcon()
             case "chat":   ChatIcon()
-            case "menu":   MenuIcon()
-            case "compose": ComposeIcon()
-            case "mic":    MicIcon()
+            case "gear":
+                Image(systemName: "gearshape.fill")
+                    .font(.system(size: size * 0.85, weight: .medium))
+                    .foregroundColor(color)
             default:       DocIcon()
             }
         }
@@ -236,109 +313,6 @@ private struct ChatIcon: View {
                 path.closeSubpath()
             }
             .stroke(color, style: StrokeStyle(lineWidth: sw * scale, lineCap: .round, lineJoin: .round))
-            .scaleEffect(scale, anchor: .topLeading)
-            .offset(x: (s - 24*scale) / 2, y: (s - 24*scale) / 2)
-        }
-    }
-}
-
-private struct MenuIcon: View {
-    @Environment(\.tabIconColor) var color
-    @Environment(\.tabIconStrokeWidth) var sw
-
-    var body: some View {
-        GeometryReader { geo in
-            let s: CGFloat = min(geo.size.width, geo.size.height)
-            let scale = s / 24
-            Path { path in
-                path.move(to: CGPoint(x: 3, y: 7))
-                path.addLine(to: CGPoint(x: 21, y: 7))
-                path.move(to: CGPoint(x: 3, y: 12))
-                path.addLine(to: CGPoint(x: 21, y: 12))
-                path.move(to: CGPoint(x: 3, y: 17))
-                path.addLine(to: CGPoint(x: 21, y: 17))
-            }
-            .stroke(color, style: StrokeStyle(lineWidth: sw * scale, lineCap: .round))
-            .scaleEffect(scale, anchor: .topLeading)
-            .offset(x: (s - 24*scale) / 2, y: (s - 24*scale) / 2)
-        }
-    }
-}
-
-private struct ComposeIcon: View {
-    @Environment(\.tabIconColor) var color
-    @Environment(\.tabIconStrokeWidth) var sw
-
-    var body: some View {
-        GeometryReader { geo in
-            let s: CGFloat = min(geo.size.width, geo.size.height)
-            let scale = s / 24
-            Path { path in
-                // Horizontal line: M12 20h9
-                path.move(to: CGPoint(x: 12, y: 20))
-                path.addLine(to: CGPoint(x: 21, y: 20))
-                // Pencil shape: M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4z
-                path.move(to: CGPoint(x: 16.5, y: 3.5))
-                path.addCurve(to: CGPoint(x: 19.5, y: 6.5),
-                              control1: CGPoint(x: 16.5 + 2.12*0.552, y: 3.5 - 2.12*0.552),
-                              control2: CGPoint(x: 19.5, y: 6.5 - 2.12*0.552))
-                path.addLine(to: CGPoint(x: 7, y: 19))
-                path.addLine(to: CGPoint(x: 3, y: 20))
-                path.addLine(to: CGPoint(x: 4, y: 16))
-                path.addLine(to: CGPoint(x: 16.5, y: 3.5))
-                path.closeSubpath()
-            }
-            .stroke(color, style: StrokeStyle(lineWidth: sw * scale, lineCap: .round, lineJoin: .round))
-            .scaleEffect(scale, anchor: .topLeading)
-            .offset(x: (s - 24*scale) / 2, y: (s - 24*scale) / 2)
-        }
-    }
-}
-
-private struct MicIcon: View {
-    @Environment(\.tabIconColor) var color
-    @Environment(\.tabIconStrokeWidth) var sw
-
-    var body: some View {
-        GeometryReader { geo in
-            let s: CGFloat = min(geo.size.width, geo.size.height)
-            let scale = s / 24
-            ZStack {
-                // Mic body (filled rounded rect)
-                Path { path in
-                    path.move(to: CGPoint(x: 9 + 3, y: 1))
-                    path.addLine(to: CGPoint(x: 15 - 3, y: 1))
-                    path.addCurve(to: CGPoint(x: 15, y: 1 + 3),
-                                  control1: CGPoint(x: 15, y: 1),
-                                  control2: CGPoint(x: 15, y: 1))
-                    path.addLine(to: CGPoint(x: 15, y: 14 - 3))
-                    path.addCurve(to: CGPoint(x: 15 - 3, y: 14),
-                                  control1: CGPoint(x: 15, y: 14),
-                                  control2: CGPoint(x: 15, y: 14))
-                    path.addLine(to: CGPoint(x: 9 + 3, y: 14))
-                    path.addCurve(to: CGPoint(x: 9, y: 14 - 3),
-                                  control1: CGPoint(x: 9, y: 14),
-                                  control2: CGPoint(x: 9, y: 14))
-                    path.addLine(to: CGPoint(x: 9, y: 1 + 3))
-                    path.addCurve(to: CGPoint(x: 9 + 3, y: 1),
-                                  control1: CGPoint(x: 9, y: 1),
-                                  control2: CGPoint(x: 9, y: 1))
-                    path.closeSubpath()
-                }
-                .fill(color)
-                // Arc and stand (stroke)
-                Path { path in
-                    path.move(to: CGPoint(x: 19, y: 10))
-                    path.addCurve(to: CGPoint(x: 5, y: 10),
-                                  control1: CGPoint(x: 19, y: 10 - 2*0.552),
-                                  control2: CGPoint(x: 5, y: 10 - 2*0.552))
-                    path.move(to: CGPoint(x: 12, y: 19))
-                    path.addLine(to: CGPoint(x: 12, y: 23))
-                    path.move(to: CGPoint(x: 8, y: 23))
-                    path.addLine(to: CGPoint(x: 16, y: 23))
-                }
-                .stroke(color, style: StrokeStyle(lineWidth: sw * scale, lineCap: .round, lineJoin: .round))
-            }
             .scaleEffect(scale, anchor: .topLeading)
             .offset(x: (s - 24*scale) / 2, y: (s - 24*scale) / 2)
         }
@@ -528,7 +502,9 @@ struct FABButton: View {
 
     var body: some View {
         Button(action: action) {
-            TabIcon(type: "mic", size: 28, color: .white, strokeWidth: 2)
+            Image(systemName: "mic.fill")
+                .font(.system(size: 28))
+                .foregroundColor(.white)
                 .frame(width: 56, height: 56)
                 .background(Circle().fill(UIConstants.blue))
                 .shadow(color: UIConstants.blue.opacity(0.45), radius: 10, y: 4)
@@ -620,5 +596,31 @@ struct SheetHandle: View {
             .fill(Color(red: 0.235, green: 0.235, blue: 0.263, opacity: 0.3))
             .frame(width: 36, height: 5)
             .padding(.top, 8)
+    }
+}
+
+// MARK: - Rounded Corner Shape (single-corner radius)
+struct RoundedCorner: Shape {
+    var tl: CGFloat = 0, tr: CGFloat = 0, bl: CGFloat = 0, br: CGFloat = 0
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let w = rect.width, h = rect.height
+
+        path.move(to: CGPoint(x: tl, y: 0))
+        path.addLine(to: CGPoint(x: w - tr, y: 0))
+        path.addArc(center: CGPoint(x: w - tr, y: tr), radius: tr,
+                    startAngle: .degrees(-90), endAngle: .degrees(0), clockwise: false)
+        path.addLine(to: CGPoint(x: w, y: h - br))
+        path.addArc(center: CGPoint(x: w - br, y: h - br), radius: br,
+                    startAngle: .degrees(0), endAngle: .degrees(90), clockwise: false)
+        path.addLine(to: CGPoint(x: bl, y: h))
+        path.addArc(center: CGPoint(x: bl, y: h - bl), radius: bl,
+                    startAngle: .degrees(90), endAngle: .degrees(180), clockwise: false)
+        path.addLine(to: CGPoint(x: 0, y: tl))
+        path.addArc(center: CGPoint(x: tl, y: tl), radius: tl,
+                    startAngle: .degrees(180), endAngle: .degrees(270), clockwise: false)
+        path.closeSubpath()
+        return path
     }
 }

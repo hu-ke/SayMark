@@ -164,9 +164,9 @@ struct CalendarView: View {
 
     // MARK: - Calendar Day Cell
     private func calendarDayCell(day: Int) -> some View {
-        let today = Calendar.current.isDateInToday(
-            Calendar.current.date(bySetting: .day, value: day, of: currentMonth) ?? Date()
-        )
+        let dayDate = Calendar.current.date(bySetting: .day, value: day, of: currentMonth) ?? Date()
+        let today = Calendar.current.isDateInToday(dayDate)
+        let isPast = !today && dayDate < Calendar.current.startOfDay(for: Date())
         let isSelected = day == selectedDay
         let hasEvent = viewModel.eventDays.contains(day)
 
@@ -185,7 +185,10 @@ struct CalendarView: View {
             } label: {
                 Text("\(day)")
                     .font(.system(size: 14, weight: today ? .bold : .regular))
-                    .foregroundColor(isSelected ? .white : today ? UIConstants.blue : UIConstants.label)
+                    .foregroundColor(isSelected ? .white
+                                     : today ? UIConstants.blue
+                                     : isPast ? UIConstants.label3
+                                     : UIConstants.label)
                     .frame(width: 32, height: 32)
                     .background(
                         Group {

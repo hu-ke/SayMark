@@ -15,6 +15,7 @@
 		2825E1D69940380CF9B0D2E6 /* AppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 336C65318C2A54C41652517F /* AppConfig.swift */; };
 		3390EA87678E012DA745ACAD /* FolderRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD61E5389B76681453EA71E2 /* FolderRowView.swift */; };
 		39F89E534DC36A62E2930D57 /* SpeechRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = D555133413D382A2720F3DC3 /* SpeechRecognizer.swift */; };
+		3E01B7BE03EC2503C7BAADA6 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E72CC8D2ED3840D81D89A68 /* SettingsView.swift */; };
 		414DB19B05F096E7AF7FDB85 /* FolderTreeViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2F7AEFF0E1C1CF1FBEA0C57 /* FolderTreeViewModel.swift */; };
 		48CE263A8ADF77CE19E82BAC /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A8A17801F3EFFE675F603CE /* ChatView.swift */; };
 		4A29B2FDA476FE11A0B22B3B /* UIConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2460D4B55DA617B1BC4B8181 /* UIConstants.swift */; };
@@ -43,6 +44,7 @@
 		0FCDBAACBD2E906F961A3316 /* NewItemSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewItemSheet.swift; sourceTree = "<group>"; };
 		10D8ABDA6AA421E724CAFA7A /* RemindersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemindersView.swift; sourceTree = "<group>"; };
 		164790EF45F22BF2EE0BDF4C /* DeviceID.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceID.swift; sourceTree = "<group>"; };
+		1E72CC8D2ED3840D81D89A68 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		2460D4B55DA617B1BC4B8181 /* UIConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UIConstants.swift; sourceTree = "<group>"; };
 		26CB68B600C2C97B1F527BD7 /* SayMarkApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SayMarkApp.swift; sourceTree = "<group>"; };
 		336C65318C2A54C41652517F /* AppConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfig.swift; sourceTree = "<group>"; };
@@ -131,6 +133,7 @@
 				10D8ABDA6AA421E724CAFA7A /* RemindersView.swift */,
 				CD6A795B59A8165D2D98B1C5 /* RenameSheet.swift */,
 				78D535DE97CFB3E5EAD25013 /* RootView.swift */,
+				1E72CC8D2ED3840D81D89A68 /* SettingsView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -279,6 +282,7 @@
 				A39DAAB1DE80E554BEB7406A /* RenameSheet.swift in Sources */,
 				9586C12AC4104279C8C1EB77 /* RootView.swift in Sources */,
 				5D3B6DB8204DAEF7EB40E8BF /* SayMarkApp.swift in Sources */,
+				3E01B7BE03EC2503C7BAADA6 /* SettingsView.swift in Sources */,
 				39F89E534DC36A62E2930D57 /* SpeechRecognizer.swift in Sources */,
 				4A29B2FDA476FE11A0B22B3B /* UIConstants.swift in Sources */,
 			);

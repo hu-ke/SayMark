@@ -181,7 +181,9 @@ struct FileDetailView: View {
             Button {
                 startVoiceEdit()
             } label: {
-                TabIcon(type: "mic", size: 22, color: .white, strokeWidth: 2)
+                Image(systemName: "mic.fill")
+                    .font(.system(size: 22))
+                    .foregroundColor(.white)
                     .frame(width: 46, height: 46)
                     .background(Circle().fill(UIConstants.blue))
                     .shadow(color: UIConstants.blue.opacity(0.38), radius: 10, y: 2)

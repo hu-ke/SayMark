@@ -76,21 +76,25 @@ struct FolderTreeView: View {
                 ) { EmptyView() }
             )
         }
-        .confirmationDialog("确定删除", isPresented: $showDeleteAlert) {
-            Button("删除", role: .destructive) {
-                guard let id = deleteTargetId else { return }
-                Task {
-                    if deleteIsFolder {
-                        await viewModel.deleteFolder(id: id)
-                    } else {
-                        await viewModel.deleteFile(id: id)
+        // 自定义删除确认弹窗
+        .overlay {
+            if showDeleteAlert {
+                DeleteConfirmDialog(
+                    isFolder: deleteIsFolder,
+                    name: deleteTargetName ?? "",
+                    onCancel: { showDeleteAlert = false },
+                    onDelete: {
+                        guard let id = deleteTargetId else { return }
+                        showDeleteAlert = false
+                        Task {
+                            if deleteIsFolder {
+                                await viewModel.deleteFolder(id: id)
+                            } else {
+                                await viewModel.deleteFile(id: id)
+                            }
+                        }
                     }
-                }
-            }
-            Button("取消", role: .cancel) {}
-        } message: {
-            if let name = deleteTargetName {
-                Text("将删除「\(name)」\(deleteIsFolder ? "及其内部文件" : "")。此操作不可撤销。")
+                )
             }
         }
     }
@@ -146,7 +150,9 @@ struct FolderTreeView: View {
                         .frame(width: 44, height: 44)
                         .shadow(color: UIConstants.blue.opacity(0.45), radius: 8, y: 6)
                         .overlay {
-                            TabIcon(type: "mic", size: 16, color: .white, strokeWidth: 2)
+                            Image(systemName: "mic.fill")
+                                .font(.system(size: 16))
+                                .foregroundColor(.white)
                         }
                         .offset(x: 38, y: 42)
                 }
@@ -211,7 +217,7 @@ struct FolderTreeView: View {
                             showDeleteAlert: $showDeleteAlert,
                             deleteTargetId: $deleteTargetId,
                             deleteTargetName: $deleteTargetName,
-                            deleteIsFolder: $deleteIsFolder
+                        deleteIsFolder: $deleteIsFolder
                         )
                     }
                 }
@@ -263,7 +269,8 @@ struct FolderCard: View {
                         swipedRow: $swipedRow,
                         showDeleteAlert: $showDeleteAlert,
                         deleteTargetId: $deleteTargetId,
-                        deleteTargetName: $deleteTargetName
+                        deleteTargetName: $deleteTargetName,
+                        deleteIsFolder: $deleteIsFolder
                     )
                     .padding(.leading, 20)
                 }
@@ -339,6 +346,21 @@ struct FolderCard: View {
                     }
                 }
         )
+        .contextMenu {
+            Button {
+                deleteTargetId = node.id
+                deleteTargetName = node.name
+                deleteIsFolder = true
+                showDeleteAlert = true
+            } label: {
+                Label("删除", systemImage: "trash")
+            }
+            Button {
+                showRenameSheet = true
+            } label: {
+                Label("重命名", systemImage: "pencil")
+            }
+        }
     }
 
     private func swipeActions(for id: String, name: String, isFolder: Bool) -> some View {
@@ -434,6 +456,21 @@ struct SubFolderRow: View {
             }
             .buttonStyle(.plain)
             .padding(.leading, 36)
+            .contextMenu {
+                Button {
+                    deleteTargetId = node.id
+                    deleteTargetName = node.name
+                    deleteIsFolder = true
+                    showDeleteAlert = true
+                } label: {
+                    Label("删除", systemImage: "trash")
+                }
+                Button {
+                    showRenameSheet = true
+                } label: {
+                    Label("重命名", systemImage: "pencil")
+                }
+            }
 
             if swipedRow == node.id {
                 HStack(spacing: 0) {
@@ -478,7 +515,8 @@ struct SubFolderRow: View {
                         swipedRow: $swipedRow,
                         showDeleteAlert: $showDeleteAlert,
                         deleteTargetId: $deleteTargetId,
-                        deleteTargetName: $deleteTargetName
+                        deleteTargetName: $deleteTargetName,
+                        deleteIsFolder: $deleteIsFolder
                     )
                     .padding(.leading, 20)
                 }
@@ -502,6 +540,7 @@ struct FileRowCard: View {
     @Binding var showDeleteAlert: Bool
     @Binding var deleteTargetId: String?
     @Binding var deleteTargetName: String?
+    @Binding var deleteIsFolder: Bool
 
     @State private var showRenameSheet = false
 
@@ -517,7 +556,7 @@ struct FileRowCard: View {
                         iconType: file.isEvent ? "cal" : "doc",
                         color: file.isEvent ? UIConstants.orange : UIConstants.label3
                     )
-                    VStack(alignment: .leading, spacing: 1) {
+                    VStack(alignment: .leading, spacing: 3) {
                         HStack(spacing: 6) {
                             Text(file.name)
                                 .font(.system(size: 17))
@@ -552,6 +591,21 @@ struct FileRowCard: View {
                         }
                     }
             )
+            .contextMenu {
+                Button {
+                    deleteTargetId = file.id
+                    deleteTargetName = file.name
+                    deleteIsFolder = false
+                    showDeleteAlert = true
+                } label: {
+                    Label("删除", systemImage: "trash")
+                }
+                Button {
+                    showRenameSheet = true
+                } label: {
+                    Label("重命名", systemImage: "pencil")
+                }
+            }
 
             if isSwiped {
                 HStack(spacing: 0) {
@@ -620,6 +674,71 @@ struct FileRowCard: View {
             let f = DateFormatter()
             f.dateFormat = "MM月dd日"
             return f.string(from: date)
+        }
+    }
+}
+
+// MARK: - Delete Confirm Dialog (matching "iOS App UI Redesign")
+struct DeleteConfirmDialog: View {
+    let isFolder: Bool
+    let name: String
+    let onCancel: () -> Void
+    let onDelete: () -> Void
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.42)
+                .ignoresSafeArea()
+                .onTapGesture { onCancel() }
+
+            VStack(spacing: 0) {
+                VStack(spacing: 8) {
+                    Text(isFolder ? "确定删除文件夹？" : "确定删除文件？")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundColor(UIConstants.label)
+                        .kerning(-0.41)
+                    Text("将删除「\(name)」\(isFolder ? "及其内部文件" : "")。此操作不可撤销。")
+                        .font(.system(size: 13))
+                        .foregroundColor(UIConstants.label3)
+                        .kerning(-0.08)
+                        .multilineTextAlignment(.center)
+                        .lineSpacing(4)
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 22)
+                .padding(.bottom, 16)
+
+                HDSeparator()
+
+                HStack(spacing: 0) {
+                    Button(action: onCancel) {
+                        Text("取消")
+                            .font(.system(size: 17))
+                            .foregroundColor(UIConstants.blue)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 44)
+                    }
+
+                    Rectangle()
+                        .fill(UIConstants.separator)
+                        .frame(width: 0.5, height: 44)
+
+                    Button(action: onDelete) {
+                        Text("删除")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundColor(UIConstants.red)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 44)
+                    }
+                }
+            }
+            .frame(width: 270)
+            .background(
+                UIConstants.background.opacity(0.98)
+                    .background(Material.ultraThin)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .shadow(color: .black.opacity(0.45), radius: 64, y: 24)
         }
     }
 }
