@@ -22,9 +22,7 @@ struct ChatView: View {
                             sidebarOpen = true
                         }
                     } label: {
-                        Image(systemName: "line.3.horizontal")
-                            .font(.system(size: 22, weight: .medium))
-                            .foregroundColor(UIConstants.blue)
+                        TabIcon(type: "menu", size: 22, color: UIConstants.blue, strokeWidth: 1.6)
                     }
 
                     Spacer()
@@ -39,9 +37,7 @@ struct ChatView: View {
                         Button {
                             viewModel.newConversation()
                         } label: {
-                            Image(systemName: "square.and.pencil")
-                                .font(.system(size: 20))
-                                .foregroundColor(UIConstants.blue)
+                            TabIcon(type: "compose", size: 20, color: UIConstants.blue, strokeWidth: 1.6)
                         }
 
                         Button {
@@ -120,11 +116,10 @@ struct ChatView: View {
     private var messageList: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(spacing: 0) {
+                LazyVStack(spacing: 12) {
                     ForEach(viewModel.messages) { msg in
                         MessageRow(message: msg)
                             .padding(.horizontal, 16)
-                            .padding(.vertical, 4)
                             .id(msg.id)
                     }
 
@@ -172,9 +167,7 @@ struct ChatView: View {
                 textEditOpen = true
                 textEditContent = ""
             } label: {
-                Image(systemName: "mic.fill")
-                    .font(.system(size: 18))
-                    .foregroundColor(.white)
+                TabIcon(type: "mic", size: 18, color: .white, strokeWidth: 2)
                     .frame(width: 36, height: 36)
                     .background(Circle().fill(UIConstants.blue))
             }
@@ -244,9 +237,7 @@ struct ChatView: View {
                         viewModel.newConversation()
                         withAnimation { sidebarOpen = false }
                     } label: {
-                        Image(systemName: "square.and.pencil")
-                            .font(.system(size: 20))
-                            .foregroundColor(UIConstants.blue)
+                        TabIcon(type: "compose", size: 20, color: UIConstants.blue, strokeWidth: 1.6)
                     }
                 }
                 .padding(.horizontal, 20)
@@ -408,6 +399,7 @@ struct MessageRow: View {
                 .clipShape(
                     RoundedCorner(topLeft: 18, topRight: 18, bottomLeft: 18, bottomRight: 4)
                 )
+                .frame(maxWidth: 272, alignment: .trailing)
         }
     }
 
@@ -424,6 +416,7 @@ struct MessageRow: View {
                 .clipShape(
                     RoundedCorner(topLeft: 18, topRight: 18, bottomLeft: 4, bottomRight: 18)
                 )
+                .frame(maxWidth: 272, alignment: .leading)
             Spacer()
         }
     }

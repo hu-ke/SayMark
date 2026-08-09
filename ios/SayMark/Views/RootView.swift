@@ -254,9 +254,7 @@ struct RecordingOverlay: View {
                         .shadow(color: (currentZone == .cancel ? UIConstants.red :
                                          currentZone == .text ? UIConstants.green : UIConstants.blue).opacity(0.25),
                                 radius: 10)
-                    Image(systemName: "mic.fill")
-                        .font(.system(size: 32))
-                        .foregroundColor(.white)
+                    TabIcon(type: "mic", size: 32, color: .white, strokeWidth: 2)
                 }
                 .padding(.bottom, 50)
             }

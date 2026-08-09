@@ -89,6 +89,9 @@ struct TabIcon: View {
             case "bell-off": BellOffIcon()
             case "folder": FolderIcon()
             case "chat":   ChatIcon()
+            case "menu":   MenuIcon()
+            case "compose": ComposeIcon()
+            case "mic":    MicIcon()
             default:       DocIcon()
             }
         }
@@ -233,6 +236,109 @@ private struct ChatIcon: View {
                 path.closeSubpath()
             }
             .stroke(color, style: StrokeStyle(lineWidth: sw * scale, lineCap: .round, lineJoin: .round))
+            .scaleEffect(scale, anchor: .topLeading)
+            .offset(x: (s - 24*scale) / 2, y: (s - 24*scale) / 2)
+        }
+    }
+}
+
+private struct MenuIcon: View {
+    @Environment(\.tabIconColor) var color
+    @Environment(\.tabIconStrokeWidth) var sw
+
+    var body: some View {
+        GeometryReader { geo in
+            let s: CGFloat = min(geo.size.width, geo.size.height)
+            let scale = s / 24
+            Path { path in
+                path.move(to: CGPoint(x: 3, y: 7))
+                path.addLine(to: CGPoint(x: 21, y: 7))
+                path.move(to: CGPoint(x: 3, y: 12))
+                path.addLine(to: CGPoint(x: 21, y: 12))
+                path.move(to: CGPoint(x: 3, y: 17))
+                path.addLine(to: CGPoint(x: 21, y: 17))
+            }
+            .stroke(color, style: StrokeStyle(lineWidth: sw * scale, lineCap: .round))
+            .scaleEffect(scale, anchor: .topLeading)
+            .offset(x: (s - 24*scale) / 2, y: (s - 24*scale) / 2)
+        }
+    }
+}
+
+private struct ComposeIcon: View {
+    @Environment(\.tabIconColor) var color
+    @Environment(\.tabIconStrokeWidth) var sw
+
+    var body: some View {
+        GeometryReader { geo in
+            let s: CGFloat = min(geo.size.width, geo.size.height)
+            let scale = s / 24
+            Path { path in
+                // Horizontal line: M12 20h9
+                path.move(to: CGPoint(x: 12, y: 20))
+                path.addLine(to: CGPoint(x: 21, y: 20))
+                // Pencil shape: M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4z
+                path.move(to: CGPoint(x: 16.5, y: 3.5))
+                path.addCurve(to: CGPoint(x: 19.5, y: 6.5),
+                              control1: CGPoint(x: 16.5 + 2.12*0.552, y: 3.5 - 2.12*0.552),
+                              control2: CGPoint(x: 19.5, y: 6.5 - 2.12*0.552))
+                path.addLine(to: CGPoint(x: 7, y: 19))
+                path.addLine(to: CGPoint(x: 3, y: 20))
+                path.addLine(to: CGPoint(x: 4, y: 16))
+                path.addLine(to: CGPoint(x: 16.5, y: 3.5))
+                path.closeSubpath()
+            }
+            .stroke(color, style: StrokeStyle(lineWidth: sw * scale, lineCap: .round, lineJoin: .round))
+            .scaleEffect(scale, anchor: .topLeading)
+            .offset(x: (s - 24*scale) / 2, y: (s - 24*scale) / 2)
+        }
+    }
+}
+
+private struct MicIcon: View {
+    @Environment(\.tabIconColor) var color
+    @Environment(\.tabIconStrokeWidth) var sw
+
+    var body: some View {
+        GeometryReader { geo in
+            let s: CGFloat = min(geo.size.width, geo.size.height)
+            let scale = s / 24
+            ZStack {
+                // Mic body (filled rounded rect)
+                Path { path in
+                    path.move(to: CGPoint(x: 9 + 3, y: 1))
+                    path.addLine(to: CGPoint(x: 15 - 3, y: 1))
+                    path.addCurve(to: CGPoint(x: 15, y: 1 + 3),
+                                  control1: CGPoint(x: 15, y: 1),
+                                  control2: CGPoint(x: 15, y: 1))
+                    path.addLine(to: CGPoint(x: 15, y: 14 - 3))
+                    path.addCurve(to: CGPoint(x: 15 - 3, y: 14),
+                                  control1: CGPoint(x: 15, y: 14),
+                                  control2: CGPoint(x: 15, y: 14))
+                    path.addLine(to: CGPoint(x: 9 + 3, y: 14))
+                    path.addCurve(to: CGPoint(x: 9, y: 14 - 3),
+                                  control1: CGPoint(x: 9, y: 14),
+                                  control2: CGPoint(x: 9, y: 14))
+                    path.addLine(to: CGPoint(x: 9, y: 1 + 3))
+                    path.addCurve(to: CGPoint(x: 9 + 3, y: 1),
+                                  control1: CGPoint(x: 9, y: 1),
+                                  control2: CGPoint(x: 9, y: 1))
+                    path.closeSubpath()
+                }
+                .fill(color)
+                // Arc and stand (stroke)
+                Path { path in
+                    path.move(to: CGPoint(x: 19, y: 10))
+                    path.addCurve(to: CGPoint(x: 5, y: 10),
+                                  control1: CGPoint(x: 19, y: 10 - 2*0.552),
+                                  control2: CGPoint(x: 5, y: 10 - 2*0.552))
+                    path.move(to: CGPoint(x: 12, y: 19))
+                    path.addLine(to: CGPoint(x: 12, y: 23))
+                    path.move(to: CGPoint(x: 8, y: 23))
+                    path.addLine(to: CGPoint(x: 16, y: 23))
+                }
+                .stroke(color, style: StrokeStyle(lineWidth: sw * scale, lineCap: .round, lineJoin: .round))
+            }
             .scaleEffect(scale, anchor: .topLeading)
             .offset(x: (s - 24*scale) / 2, y: (s - 24*scale) / 2)
         }
@@ -422,9 +528,7 @@ struct FABButton: View {
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: "mic.fill")
-                .font(.system(size: 28))
-                .foregroundColor(.white)
+            TabIcon(type: "mic", size: 28, color: .white, strokeWidth: 2)
                 .frame(width: 56, height: 56)
                 .background(Circle().fill(UIConstants.blue))
                 .shadow(color: UIConstants.blue.opacity(0.45), radius: 10, y: 4)

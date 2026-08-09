@@ -146,9 +146,7 @@ struct FolderTreeView: View {
                         .frame(width: 44, height: 44)
                         .shadow(color: UIConstants.blue.opacity(0.45), radius: 8, y: 6)
                         .overlay {
-                            Image(systemName: "mic.fill")
-                                .font(.system(size: 16))
-                                .foregroundColor(.white)
+                            TabIcon(type: "mic", size: 16, color: .white, strokeWidth: 2)
                         }
                         .offset(x: 38, y: 42)
                 }

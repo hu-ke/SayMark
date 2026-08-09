@@ -72,9 +72,7 @@ struct CommandInputView: View {
                                 Task { await speechRecognizer.startRecording() }
                             }
                         } label: {
-                            Image(systemName: "mic.fill")
-                                .font(.system(size: 22))
-                                .foregroundColor(.white)
+                            TabIcon(type: "mic", size: 22, color: .white, strokeWidth: 2)
                                 .frame(width: 44, height: 44)
                                 .background(Circle().fill(speechRecognizer.isRecording ? UIConstants.red : UIConstants.blue))
                                 .shadow(color: UIConstants.blue.opacity(0.33), radius: 14, y: 4)
