@@ -167,6 +167,7 @@ _AGENT_SYSTEM_PROMPT = f"""\
 
 2. create_note — 创建笔记（无明确时间的备忘）
    参数：content(备忘原文), target_folder_id?(目录id)
+   重要：content 只做优化和结构化（修正错别字、整理格式），**绝对不要**添加用户没说的内容、不要润色扩展、不要添油加醋。
 
 3. create_event — 创建日程（有明确时间的安排）
    参数：title(标题), date(YYYY-MM-DD), time?(HH:MM), content(详情), target_folder_id?(目录id)
@@ -214,7 +215,8 @@ _AGENT_SYSTEM_PROMPT = f"""\
 4. 删除操作需用户确认：输出 done 并在 reply 中询问。
 5. **创建日程 + 提醒必须分两步**：在同一组 tool_calls 中先 create_event，再 set_reminder（用 name 引用刚创建的日程名）。只创建日程不设置提醒是不够的。
 6. set_reminder 引用刚创建的日程时，用 name 参数传入日程标题，不要用 id（此时还没有 id）。系统会按名称自动匹配。
-7. 只输出 JSON，不要 markdown 代码块。"""
+7. **创建笔记时禁止添油加醋**：用户说「记一下：今天买了苹果」→ content="今天买了苹果"（只修正错别字和格式），**不要**扩展成「今天买了苹果，苹果富含维生素…」之类的废话。你只是帮用户整理，不是代用户写作。
+8. 只输出 JSON，不要 markdown 代码块。"""
 
 _MAX_AGENT_ITERATIONS = 5  # agent 循环最大迭代次数
 
