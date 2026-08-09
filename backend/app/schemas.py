@@ -1,6 +1,6 @@
 """pydantic 请求/响应模型。
 
-约定：ID 字段用字符串；日期用 ISO 字符串。MongoDB 文档在 crud 层完成序列化。
+约定：ID 字段用字符串；日期用 ISO 字符串。
 """
 
 from typing import Any, List, Optional
@@ -111,7 +111,7 @@ class FileMetaResponse(BaseModel):
     time: str = ""      # 仅 event 类型有值 HH:MM
     reminder_minutes: Optional[int] = None
     recurrence: Optional[str] = None  # null/""=一次性，"daily"/"weekly"/"monthly"
-    recurrence_end_date: str = ""     # 周期结束日期 YYYY-MM-DD，空=无限
+    recurrence_end_date: Optional[str] = None  # 周期结束日期
     created_at: str
     updated_at: str
 
@@ -128,7 +128,7 @@ class FileResponse(BaseModel):
     time: str = ""
     reminder_minutes: Optional[int] = None
     recurrence: Optional[str] = None
-    recurrence_end_date: str = ""
+    recurrence_end_date: Optional[str] = None
     created_at: str
     updated_at: str
 

@@ -42,6 +42,23 @@ async def chat(system_prompt: str, user_prompt: str, temperature: float = 0.7) -
     return response.choices[0].message.content or ""
 
 
+async def chat_messages(messages: list[dict], temperature: float = 0.7) -> str:
+    """非流式调用 Qwen，支持完整多轮对话消息列表。
+
+    Args:
+        messages: OpenAI 格式的消息列表 [{"role":"system"|"user"|"assistant", "content":"..."}]
+        temperature: 采样温度
+    """
+    client = _get_client()
+    settings = get_settings()
+    response = await client.chat.completions.create(
+        model=settings.QWEN_MODEL,
+        messages=messages,
+        temperature=temperature,
+    )
+    return response.choices[0].message.content or ""
+
+
 async def chat_stream(
     messages: list[dict],
     temperature: float = 0.7,
@@ -63,3 +80,17 @@ async def chat_stream(
     async for chunk in stream:
         if chunk.choices and chunk.choices[0].delta.content:
             yield chunk.choices[0].delta.content
+
+
+async def embed(text: str) -> list[float]:
+    """将文本转为向量（embedding），用于语义搜索。
+
+    使用 DashScope text-embedding-v3 模型。
+    返回 1024 维浮点数向量。
+    """
+    client = _get_client()
+    response = await client.embeddings.create(
+        model="text-embedding-v3",
+        input=text,
+    )
+    return response.data[0].embedding

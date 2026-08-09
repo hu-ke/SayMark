@@ -1,6 +1,6 @@
 """FastAPI 入口。
 
-启动时连接 MongoDB、建索引、初始化「未分类」目录；启用 CORS；挂载路由。
+启动时初始化 PostgreSQL、确保「未分类」目录；启用 CORS；挂载路由。
 """
 
 from contextlib import asynccontextmanager
@@ -8,21 +8,17 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from . import database
-from .crud import get_default_uncategorized_folder
+from . import pg_ops
+from .pg_db import close_pool
 from .routers import ai, events, files, folders, geo, notes, reminders, user
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期：启动时初始化资源，关闭时释放。"""
-    # 启动：连接 MongoDB、建索引、确保「未分类」目录存在
-    await database.connect_db()
-    await database.ensure_indexes()
-    await get_default_uncategorized_folder()
+    await pg_ops.get_default_uncategorized_folder()
     yield
-    # 关闭：断开 MongoDB 连接
-    await database.close_db()
+    await close_pool()
 
 
 app = FastAPI(title="SayMark API", lifespan=lifespan)

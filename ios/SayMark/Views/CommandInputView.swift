@@ -8,7 +8,6 @@ struct CommandInputView: View {
     @State private var resultMessage: String?
     @State private var resultSuccess: Bool = false
     @State private var isSending = false
-    @StateObject private var recognizer = SpeechRecognizer()
     /// 待确认指令：收到 confirm_required 时暂存 confirmation_id 与提示文案
     @State private var pendingConfirmationId: String?
     @State private var pendingConfirmationMessage: String = ""
@@ -21,32 +20,13 @@ struct CommandInputView: View {
                     TextField("说话或输入文字，例如：明天下午3点面试 / 定位到工作文件夹", text: $inputText, axis: .vertical)
                         .textFieldStyle(.roundedBorder)
                         .lineLimit(1...4)
-                    Button {
-                        Task {
-                            if recognizer.isRecording {
-                                recognizer.stopRecording()
-                                if !recognizer.transcript.isEmpty {
-                                    inputText = recognizer.transcript
-                                }
-                            } else {
-                                await recognizer.startRecording()
-                            }
+                    VoiceRecordButton(
+                        onSend: { text in
+                            inputText = text
                         }
-                    } label: {
-                        Image(systemName: recognizer.isRecording ? "stop.circle.fill" : "mic.fill")
-                            .font(.title2)
-                            .foregroundStyle(recognizer.isRecording ? Color.red : Color.accentColor)
-                    }
+                    )
                 }
                 .padding(.horizontal)
-
-                if recognizer.isRecording {
-                    Text(recognizer.transcript)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal)
-                }
 
                 Button {
                     Task { await sendCommand() }
@@ -85,18 +65,10 @@ struct CommandInputView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("关闭") { recognizer.stopRecording(); dismiss() }
+                    Button("关闭") { dismiss() }
                 }
             }
-            .onDisappear { recognizer.stopRecording() }
-            .alert("出错了", isPresented: Binding(
-                get: { recognizer.errorMessage != nil },
-                set: { if !$0 { recognizer.errorMessage = nil } }
-            )) {
-                Button("好") { recognizer.errorMessage = nil }
-            } message: {
-                Text(recognizer.errorMessage ?? "")
-            }
+        }
             .confirmationDialog(
                 "请确认执行",
                 isPresented: Binding(
@@ -120,7 +92,6 @@ struct CommandInputView: View {
             } message: {
                 Text(pendingConfirmationMessage)
             }
-        }
     }
 
     private func sendCommand() async {

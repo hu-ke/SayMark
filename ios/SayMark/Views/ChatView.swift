@@ -3,7 +3,6 @@ import SwiftUI
 /// 聊天对话界面（气泡 + 打字机 + 多会话管理 + 语音/文字输入）
 struct ChatView: View {
     @StateObject private var viewModel = ChatViewModel()
-    @StateObject private var recognizer = SpeechRecognizer()
     @State private var inputText = ""
     @FocusState private var isFocused: Bool
     @State private var showHistory = false
@@ -21,9 +20,13 @@ struct ChatView: View {
                                     emptyPrompt.padding(.top, 60)
                                 }
                                 ForEach(viewModel.messages) { msg in
-                                    MessageBubble(message: msg)
-                                        .id(msg.id)
-                                }
+                                MessageBubble(message: msg, onToggle: {
+                                    if let idx = viewModel.messages.firstIndex(where: { $0.id == msg.id }) {
+                                        viewModel.messages[idx].isExpanded.toggle()
+                                    }
+                                })
+                                    .id(msg.id)
+                            }
                                 Color.clear.frame(height: 1).id(bottomID)
                             }
                             .padding(.horizontal, 12)
@@ -46,7 +49,6 @@ struct ChatView: View {
                     historySidebar
                 }
             }
-            .navigationTitle(viewModel.messages.isEmpty ? "聊天" : "聊天")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -74,15 +76,6 @@ struct ChatView: View {
             } message: {
                 Text(viewModel.error ?? "")
             }
-            .alert("语音识别", isPresented: Binding(
-                get: { recognizer.errorMessage != nil },
-                set: { if !$0 { recognizer.errorMessage = nil } }
-            )) {
-                Button("好") { recognizer.errorMessage = nil }
-            } message: {
-                Text(recognizer.errorMessage ?? "")
-            }
-            .onDisappear { recognizer.stopRecording() }
         }
     }
 
@@ -90,49 +83,13 @@ struct ChatView: View {
 
     private var inputBar: some View {
         VStack(spacing: 4) {
-            // 语音识别中：显示转录文字
-            if recognizer.isRecording {
-                HStack {
-                    HStack(spacing: 6) {
-                        Circle()
-                            .fill(.red)
-                            .frame(width: 8, height: 8)
-                            .opacity(recognizer.isRecording ? 1 : 0.3)
-                        Text(recognizer.transcript.isEmpty ? "正在聆听..." : recognizer.transcript)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-                        Spacer()
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(Color.gray.opacity(0.1))
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                }
-                .padding(.horizontal, 12)
-                .padding(.top, 4)
-            }
-
             HStack(alignment: .bottom, spacing: 8) {
-                // 话筒按钮
-                Button {
-                    Task {
-                        if recognizer.isRecording {
-                            recognizer.stopRecording()
-                            if !recognizer.transcript.isEmpty {
-                                let text = recognizer.transcript
-                                viewModel.send(text)
-                            }
-                        } else {
-                            await recognizer.startRecording()
-                        }
+                // 话筒按钮（按住录音）
+                VoiceRecordButton(
+                    onSend: { text in
+                        viewModel.send(text)
                     }
-                } label: {
-                    Image(systemName: recognizer.isRecording ? "stop.circle.fill" : "mic.fill")
-                        .font(.title3)
-                        .foregroundStyle(recognizer.isRecording ? .red : .accentColor)
-                        .padding(.bottom, 4)
-                }
+                )
                 .disabled(viewModel.isStreaming)
 
                 // 文字输入
@@ -151,7 +108,7 @@ struct ChatView: View {
                     } label: {
                         Image(systemName: "arrow.up.circle.fill")
                             .font(.title2)
-                            .foregroundStyle(.accentColor)
+                            .foregroundColor(.accentColor)
                     }
                     .disabled(viewModel.isStreaming)
                 }
@@ -252,12 +209,70 @@ struct ChatView: View {
 /// 消息气泡
 private struct MessageBubble: View {
     let message: ChatMessage
+    var onToggle: (() -> Void)? = nil
 
     var body: some View {
         if message.role == .thinking {
             thinkingBubble
+        } else if message.role == .thinkingGroup {
+            thinkingGroupCard
         } else {
             chatBubble
+        }
+    }
+
+    /// 可折叠的思考卡片（Trae Agent 风格）
+    private var thinkingGroupCard: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Button(action: { onToggle?() }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: message.isExpanded ? "chevron.down" : "chevron.right")
+                            .font(.caption2)
+                            .foregroundStyle(.orange)
+                        Image(systemName: "brain.head.profile")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                        Text(message.content)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Text("\(message.steps.count)步")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary.opacity(0.6))
+                    }
+                }
+                .buttonStyle(.plain)
+
+                if message.isExpanded {
+                    // 实时思考文本（AI 推理的打字机效果）
+                    if !message.liveText.isEmpty {
+                        Text(message.liveText)
+                            .font(.caption2)
+                            .foregroundStyle(.orange.opacity(0.9))
+                            .padding(.leading, 4)
+                            .padding(.top, 2)
+                    }
+
+                    if !message.steps.isEmpty {
+                        VStack(alignment: .leading, spacing: 2) {
+                            ForEach(message.steps, id: \.self) { step in
+                                Text(step)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary.opacity(0.8))
+                                    .padding(.leading, 4)
+                            }
+                        }
+                        .padding(.top, 2)
+                        .padding(.leading, 16)
+                    }
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(Color.gray.opacity(0.06))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            Spacer(minLength: 60)
         }
     }
 

@@ -4,7 +4,7 @@ from typing import List
 
 from fastapi import APIRouter, HTTPException
 
-from .. import crud
+from .. import pg_ops as crud
 from ..schemas import FolderCreate, FolderResponse, FolderTreeNode, FolderUpdate
 
 router = APIRouter(prefix="/api/folders", tags=["folders"])

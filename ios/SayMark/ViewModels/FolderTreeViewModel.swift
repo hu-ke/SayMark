@@ -8,6 +8,7 @@ final class FolderTreeViewModel: ObservableObject {
     @Published var loading: Bool = false
     @Published var error: String?
     @Published var selectedFolderId: String?  // 定位文件夹
+    @Published var hideFloatingButton = false  // 进入详情页时隐藏浮动按钮
 
     private let api = APIClient.shared
 

@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, HTTPException
 
-from .. import crud
+from .. import pg_ops as crud
 from ..schemas import FileCreate, FileMove, FileResponse, FileUpdate
 
 router = APIRouter(prefix="/api/files", tags=["files"])

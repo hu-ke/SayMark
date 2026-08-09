@@ -33,6 +33,19 @@ struct CalendarEvent: Codable, Identifiable, Hashable {
         guard !time.isEmpty else { return "" }
         return time
     }
+
+    /// 转为 NoteFile，用于导航到文件详情页
+    func toNoteFile() -> NoteFile {
+        NoteFile(
+            id: id, name: name, content: content,
+            parentId: parentId, type: "event",
+            date: date, time: time,
+            reminderMinutes: reminderMinutes,
+            recurrence: recurrence,
+            recurrenceEndDate: recurrenceEndDate,
+            createdAt: createdAt, updatedAt: updatedAt
+        )
+    }
 }
 
 /// 月历摘要项（某天有几个日程）

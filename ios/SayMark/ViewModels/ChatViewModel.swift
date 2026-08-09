@@ -5,13 +5,17 @@ struct ChatMessage: Identifiable, Equatable {
     let id: String
     let role: ChatRole
     let content: String
-    let isStreaming: Bool        // true = 正在接收流式 token
-    let isThinking: Bool         // true = 思考过程消息
+    let isStreaming: Bool
+    let isThinking: Bool
+    var steps: [String]          // 思考步骤（thinkingGroup 用）
+    var isExpanded: Bool         // 是否展开思考卡片
+    var liveText: String         // 实时打字机文本（thinkingGroup 用）
 
     enum ChatRole {
         case user
         case assistant
-        case thinking             // 思考中 → 显示执行结果/分析过程
+        case thinking             // 单条思考步骤（兼容旧格式）
+        case thinkingGroup        // 可折叠思考卡片
     }
 }
 
@@ -32,6 +36,8 @@ final class ChatViewModel: ObservableObject {
 
     private var currentConversationId: String = ""
     private var typewriterTask: Task<Void, Never>?
+    private var currentStreamTask: Task<Void, Never>?
+    private var pendingStepFullText: String?
 
     var hasActiveConversation: Bool { !currentConversationId.isEmpty }
 
@@ -39,30 +45,37 @@ final class ChatViewModel: ObservableObject {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, !isStreaming else { return }
 
+        // 取消上一个流（如果有）
+        currentStreamTask?.cancel()
+
         if currentConversationId.isEmpty {
             currentConversationId = UUID().uuidString
             let title = String(trimmed.prefix(20))
             conversations.insert(ConversationMeta(id: currentConversationId, title: title, preview: trimmed), at: 0)
         }
 
-        messages.append(ChatMessage(id: UUID().uuidString, role: .user, content: trimmed, isStreaming: false, isThinking: false))
+        messages.append(ChatMessage(id: UUID().uuidString, role: .user, content: trimmed, isStreaming: false, isThinking: false, steps: [], isExpanded: true, liveText: ""))
 
         isStreaming = true
         error = nil
 
-        Task { await streamChat(text: trimmed) }
+        currentStreamTask = Task { await streamChat(text: trimmed) }
     }
 
     func switchToConversation(_ conv: ConversationMeta) {
         guard conv.id != currentConversationId, !isStreaming else { return }
+        currentStreamTask?.cancel()
         typewriterTask?.cancel()
+        pendingStepFullText = nil
         currentConversationId = conv.id
         messages = []
         isStreaming = false
     }
 
     func newConversation() {
+        currentStreamTask?.cancel()
         typewriterTask?.cancel()
+        pendingStepFullText = nil
         currentConversationId = ""
         messages = []
         isStreaming = false
@@ -71,6 +84,7 @@ final class ChatViewModel: ObservableObject {
     // MARK: - 真正的流式接收（token 到了立刻显示）
 
     private func streamChat(text: String) async {
+        var streamConvId = currentConversationId  // 捕获当前会话 ID，防止切换会话后旧内容漏入
         let urlStr = "\(AppConfig.baseURL)/api/ai/chat/stream"
         guard let url = URL(string: urlStr) else {
             finishStream(error: "无效的请求地址")
@@ -91,32 +105,79 @@ final class ChatViewModel: ObservableObject {
         do {
             let (bytes, _) = try await URLSession.shared.bytes(for: req)
             var fullResponse = ""
-            var thinkingInserted = false
 
             for try await line in bytes.lines {
                 guard !Task.isCancelled else { break }
+                // 如果用户切换/新建了会话，丢弃当前流的所有后续内容
+                guard currentConversationId == streamConvId else { break }
                 guard line.hasPrefix("data: ") else { continue }
                 let payload = String(line.dropFirst(6))
                 if payload == "[DONE]" { break }
 
                 guard let data = payload.data(using: .utf8) else { continue }
 
-                // 解析 conversation_id
+                // 解析 conversation_id（可能包含 status 字段）
                 if let obj = try? JSONSerialization.jsonObject(with: data) as? [String: String],
                    let cid = obj["conversation_id"] {
                     currentConversationId = cid
+                    streamConvId = cid  // 同步捕获的 ID，首次消息时后端会返回新 UUID
                     if let idx = conversations.firstIndex(where: { $0.id == currentConversationId || $0.id.isEmpty }) {
                         conversations[idx] = ConversationMeta(id: cid, title: conversations[idx].title, preview: conversations[idx].preview)
+                    }
+                    // status: 'loading' → 思考卡片会在后续进度事件中自动出现
+                    if obj["status"] == "loading" {
+                        // 不再创建空加载气泡，思考卡片本身就是进度反馈
+                        continue
                     }
                     continue
                 }
 
-                // 解析 thinking 消息（后端发出，展示思考过程）
-                if let obj = try? JSONSerialization.jsonObject(with: data) as? [String: String],
-                   let thinking = obj["thinking"] {
-                    messages.append(ChatMessage(id: UUID().uuidString, role: .thinking, content: thinking, isStreaming: false, isThinking: true))
-                    thinkingInserted = true
-                    continue
+                // 解析结构化 thinking 事件
+                if let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                    if let title = obj["thinking_start"] as? String {
+                        // 避免重复创建卡片（thinking_text 可能已先创建）
+                        if messages.lastIndex(where: { $0.role == .thinkingGroup }) == nil {
+                            var card = ChatMessage(id: UUID().uuidString, role: .thinkingGroup, content: title, isStreaming: false, isThinking: true, steps: [], isExpanded: true, liveText: "")
+                            messages.append(card)
+                        }
+                        continue
+                    }
+                    if let stepText = obj["thinking_step"] as? String {
+                        // 打字机效果：逐步显示步骤文本
+                        startTypewriterStep(stepText)
+                        continue
+                    }
+                    if let _ = obj["thinking_end"] {
+                        typewriterTask?.cancel()
+                        if let idx = messages.lastIndex(where: { $0.role == .thinkingGroup }) {
+                            // 确保最后一条 typesetting step 完整展示
+                            if let lastStep = messages[idx].steps.last, lastStep.isEmpty || lastStep.count < (pendingStepFullText?.count ?? 0) {
+                                if let full = pendingStepFullText {
+                                    messages[idx].steps[messages[idx].steps.count - 1] = full
+                                }
+                            }
+                            let count = messages[idx].steps.count
+                            messages[idx] = ChatMessage(id: messages[idx].id, role: .thinkingGroup, content: "处理完成（\(count)步）", isStreaming: false, isThinking: true, steps: messages[idx].steps, isExpanded: false, liveText: "")
+                        }
+                        pendingStepFullText = nil
+                        continue
+                    }
+                    // 服务端已逐字发送的思考过程实时文本
+                    if let thinkingText = obj["thinking_text"] as? String {
+                        if let idx = messages.lastIndex(where: { $0.role == .thinkingGroup }) {
+                            messages[idx].liveText = thinkingText
+                        } else {
+                            // thinking_text 可能在 thinking_start 之前到达，先创建卡片
+                            var card = ChatMessage(id: UUID().uuidString, role: .thinkingGroup, content: "正在处理...", isStreaming: false, isThinking: true, steps: [], isExpanded: true, liveText: thinkingText)
+                            messages.append(card)
+                        }
+                        continue
+                    }
+                    // 兼容旧格式
+                    if let thinking = obj["thinking"] as? String {
+                        messages.append(ChatMessage(id: UUID().uuidString, role: .thinking, content: thinking, isStreaming: false, isThinking: true, steps: [], isExpanded: true, liveText: ""))
+                        continue
+                    }
                 }
 
                 // 普通 token：直接追加显示
@@ -124,13 +185,18 @@ final class ChatViewModel: ObservableObject {
                    let unescaped = try? JSONDecoder().decode(String.self, from: data) {
                     fullResponse += unescaped
 
-                    // 第一个 token 到达时创建 assistant 消息
+                    // 第一个 token 到达时：如果有空占位消息则替换，否则创建
                     if fullResponse.count == unescaped.count {
-                        messages.append(ChatMessage(id: UUID().uuidString, role: .assistant, content: unescaped, isStreaming: true, isThinking: false))
+                        if let idx = messages.lastIndex(where: { $0.isStreaming && $0.role == .assistant && $0.content.isEmpty }) {
+                            // 替换之前的加载占位
+                            messages[idx] = ChatMessage(id: messages[idx].id, role: .assistant, content: unescaped, isStreaming: true, isThinking: false, steps: [], isExpanded: true, liveText: "")
+                        } else {
+                            messages.append(ChatMessage(id: UUID().uuidString, role: .assistant, content: unescaped, isStreaming: true, isThinking: false, steps: [], isExpanded: true, liveText: ""))
+                        }
                     } else {
                         // 更新已有消息
                         if let idx = messages.lastIndex(where: { $0.isStreaming && $0.role == .assistant }) {
-                            messages[idx] = ChatMessage(id: messages[idx].id, role: .assistant, content: fullResponse, isStreaming: true, isThinking: false)
+                            messages[idx] = ChatMessage(id: messages[idx].id, role: .assistant, content: fullResponse, isStreaming: true, isThinking: false, steps: [], isExpanded: true, liveText: "")
                         }
                     }
                 }
@@ -138,7 +204,7 @@ final class ChatViewModel: ObservableObject {
 
             // 完成：把最后一条标记为非流式
             if let idx = messages.lastIndex(where: { $0.isStreaming && $0.role == .assistant }) {
-                messages[idx] = ChatMessage(id: messages[idx].id, role: .assistant, content: messages[idx].content, isStreaming: false, isThinking: false)
+                messages[idx] = ChatMessage(id: messages[idx].id, role: .assistant, content: messages[idx].content, isStreaming: false, isThinking: false, steps: [], isExpanded: true, liveText: "")
             }
             // 更新预览
             if let idx = conversations.firstIndex(where: { $0.id == currentConversationId }) {
@@ -153,12 +219,49 @@ final class ChatViewModel: ObservableObject {
 
     private func finishStream(error: String?) {
         typewriterTask?.cancel()
+        pendingStepFullText = nil
         isStreaming = false
         if let error = error {
             self.error = error
             // 把最后一条流式消息改为错误
             if let idx = messages.lastIndex(where: { $0.isStreaming }) {
-                messages[idx] = ChatMessage(id: messages[idx].id, role: messages[idx].role, content: messages[idx].content, isStreaming: false, isThinking: false)
+                messages[idx] = ChatMessage(id: messages[idx].id, role: messages[idx].role, content: messages[idx].content, isStreaming: false, isThinking: false, steps: [], isExpanded: true, liveText: "")
+            }
+        }
+    }
+
+    // MARK: - 步骤打字机效果
+
+    /// 逐步显示思考步骤文本，产生打字机效果
+    private func startTypewriterStep(_ fullText: String) {
+        guard let idx = messages.lastIndex(where: { $0.role == .thinkingGroup }) else { return }
+
+        // 先取消上一个步骤的打字机任务
+        typewriterTask?.cancel()
+
+        // 确保上一步完整展示（如果之前有被打断的步骤）
+        if let pending = pendingStepFullText,
+           let lastStep = messages[idx].steps.last,
+           lastStep.count < pending.count {
+            messages[idx].steps[messages[idx].steps.count - 1] = pending
+        }
+
+        // 将新步骤以空字符串占位加入
+        messages[idx].steps.append("")
+        let stepIndex = messages[idx].steps.count - 1
+        let msgId = messages[idx].id
+        pendingStepFullText = fullText
+
+        typewriterTask = Task {
+            var revealed = ""
+            for char in fullText {
+                guard !Task.isCancelled else { return }
+                revealed.append(char)
+                if let idx2 = messages.lastIndex(where: { $0.role == .thinkingGroup && $0.id == msgId }),
+                   stepIndex < messages[idx2].steps.count {
+                    messages[idx2].steps[stepIndex] = revealed
+                }
+                try? await Task.sleep(for: .milliseconds(15))
             }
         }
     }

@@ -2,15 +2,17 @@
 
 解析时把当前真实目录树喂给 LLM，由 LLM 根据语义直接选出要操作的文件/文件夹 id，
 而非依赖字符串模糊匹配。支持多步骤指令与「补充笔记」。
+对于涉及日期引用的操作（如「删掉昨天的笔记」），后端预先查询 PostgreSQL 过滤匹配文件，
+将结果注入提示词，LLM 只做最终确认，避免幻觉。
 
 输出格式：{"steps": [...], "needs_confirmation": bool, "summary": str}
 """
 
 import json
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 
-from .. import crud
+from .. import pg_ops as crud
 from . import qwen
 
 # 指令解析系统提示词（运行时拼接目录树清单）
@@ -20,6 +22,9 @@ _SYSTEM_PROMPT_TEMPLATE = (
     "当前目录树（每行：类型 | id | 名称 | 创建时间 | 完整路径）：\n"
     "{inventory}\n\n"
     "{target_context}"
+    "{date_filtered}"
+    "{semantic_context}"
+    "{date_reference}"
     "支持的 action：\n"
     "- create_note: 新建笔记（无明确时间/日期的备忘）。参数 content(备忘原文), target_folder_id?(可选目录 id；缺省「未分类」), target_folder?(用户提到的目录名，兜底用)\n"
     "- create_event: 新建日程（有明确时间/日期的安排）。参数 title(日程标题), date(日期 YYYY-MM-DD), time(时间 HH:MM，缺省空), content(日程详情), target_folder_id?(可选目录 id), target_folder?(用户提到的目录名，兜底用)。当用户说「安排/预定/约了/XX点XX分/下周一/明天/X月X号」并且涉及具体时间点时用此 action\n"
@@ -50,8 +55,8 @@ _SYSTEM_PROMPT_TEMPLATE = (
     "- 「明天」= 当前日期 + 1 天\n"
     "- 「后天」= 当前日期 + 2 天\n"
     "- 「大后天」= 当前日期 + 3 天\n"
-    "- 「下周X」：先找当前日期之后的下一个周X（跳过当前周），得到 date。例：今天是周五，「下周周一」= 下下周一（跳过本周六日，找下周一）。再强调一遍：「下周X」只跳一次，不是两周！\n"
-    "- 「下下周X」：先找到下周X，再加 7 天。例：今天是周五（周5），「下下周周六」：下周周六 = 当天+8 天，下下周周六 = 当天+15 天。\n"
+    "- 「下周X」：参考下方「日期参考」表格中「下周X」对应的日期直接填入，不要自己算！\n"
+    "- 「下下周X」：参考下方「日期参考」表格中「下下周X」对应的日期直接填入。\n"
     "- 「上/昨/前」同理反向推算\n"
     "- 「X月X号/X月X日」直接取该日期，年份取当前年份（如果该日期已过，取明年）\n"
     "- 如果有具体时间（如「下午2点」），填入 time 字段（24小时制 HH:MM）\n"
@@ -69,8 +74,18 @@ _SYSTEM_PROMPT_TEMPLATE = (
     "   步骤2: set_reminder(name=网课, minutes=3, recurrence=daily/weekly/... , recurrence_end_date=如有结束日期则填)\n"
     "   对于没有具体日期的周期日程（如「每天…」），date 填今天（YYYY-MM-DD）。步骤2 的 target_id 留空，用 name 引用步骤1 创建的名称。\n"
     "   判断标准：目录树中不存在同名日程 + 用户提到了提醒相关词（通知/提醒/和我说/提前），就必须用 create_event + set_reminder 两步！\n"
-    "14. 只输出 JSON 对象，不要 markdown 代码块，不要解释。"
+    "14. **主题查询**：当用户说「购物相关的」「关于XX的笔记」等描述性查询时，请查看上面「匹配结果」中的记录——那就是数据库中实际匹配到的笔记/日程。直接操作这些记录，不要说无法筛选或缺少分类系统。如果匹配结果为空，返回空的 steps 即可。\n"
+    "15. 只输出 JSON 对象，不要 markdown 代码块，不要解释。"
 )
+
+
+def _fmt_date(value) -> str:
+    """安全地将 datetime 或字符串转为 YYYY-MM-DD。"""
+    if value is None:
+        return ""
+    if hasattr(value, "strftime"):
+        return value.strftime("%Y-%m-%d")  # type: ignore[union-attr]
+    return str(value)[:10]
 
 
 def _strip_code_fence(text: str) -> str:
@@ -100,10 +115,10 @@ async def _build_inventory() -> str:
         for node in nodes:
             name = node["name"]
             path = f"{parent_path}/{name}"
-            created = node.get("created_at", "")[:10]  # 只取日期 YYYY-MM-DD
+            created = _fmt_date(node.get("created_at"))
             lines.append(f"folder | {node['id']} | {name} | {created} | {path}")
             for f in node.get("files", []):
-                f_created = f.get("created_at", "")[:10]
+                f_created = _fmt_date(f.get("created_at"))
                 lines.append(f"file | {f['id']} | {f['name']} | {f_created} | {path}/{f['name']}")
             walk(node.get("children", []), path)
 
@@ -129,9 +144,151 @@ async def _build_target_context(file_id: str) -> str:
         f"- 名称: {name}\n"
         f"- 内容预览:\n```\n{preview}\n```\n\n"
         f"**重要**：用户的所有修改意图都是针对这篇笔记的。"
-        f"请用 append_note(target_id='{file_id}', content='修改内容') 把调整应用到这篇笔记。"
+        f"请用 append_note(target_id='{file_id}', content='调整指令') 把用户意图传递给后续处理。\n"
+        f"content 字段填入对笔记的具体操作指令（而非原文照抄），例如：\n"
+        f"  - 修改：「把时间改为14:00，日期改为2026-08-12」\n"
+        f"  - 删除：「删除日期和时间的行」「去掉第二行」\n"
+        f"  - 新增：「补充：记得带毛巾」\n"
         f"不要创建新笔记！不要找其他目标！\n\n"
     )
+
+
+# 日期关键词 → 相对偏移（天），基于当前日期
+_RELATIVE_DATE_PATTERNS = [
+    (re.compile(r"今天"), 0),
+    (re.compile(r"昨天"), -1),
+    (re.compile(r"前天"), -2),
+    (re.compile(r"大前天"), -3),
+    (re.compile(r"明天"), 1),
+    (re.compile(r"后天"), 2),
+    (re.compile(r"大后天"), 3),
+]
+
+# 绝对日期: "X月X号" / "X月X日"
+_ABSOLUTE_DATE_PATTERN = re.compile(r"(\d{1,2})\s*月\s*(\d{1,2})\s*[号日]")
+
+
+def _extract_date_from_text(text: str, now: datetime) -> str | None:
+    """从用户文本中提取日期引用，返回 YYYY-MM-DD 或 None（无日期引用）。
+
+    按优先级：先匹配「今天/昨天/前天」等相对词，再匹配「X月X号」。
+    """
+    # 1. 相对日期
+    for pattern, offset in _RELATIVE_DATE_PATTERNS:
+        if pattern.search(text):
+            target = now + timedelta(days=offset)
+            return target.strftime("%Y-%m-%d")
+
+    # 2. 绝对日期「X月X号/日」
+    match = _ABSOLUTE_DATE_PATTERN.search(text)
+    if match:
+        month = int(match.group(1))
+        day = int(match.group(2))
+        year = now.year
+        # 如果该日期在今年已过，取明年
+        candidate = datetime(year, month, day)
+        if candidate < now.replace(hour=0, minute=0, second=0, microsecond=0):
+            candidate = datetime(year + 1, month, day)
+        return candidate.strftime("%Y-%m-%d")
+
+    return None
+
+
+async def _build_date_filtered_context(text: str) -> str:
+    """如果用户文本中包含日期引用，查询 PostgreSQL 过滤匹配文件，返回预过滤上下文。
+
+    返回空字符串表示没有日期引用或无匹配文件。
+    """
+    now = datetime.now()
+    date_str = _extract_date_from_text(text, now)
+    if not date_str:
+        return ""
+
+    files = await crud.find_files_by_created_date(date_str)
+    if not files:
+        return (
+            f"## 日期过滤结果\n"
+            f"用户提到的日期为 {date_str}，但数据库中**没有**该日期创建的笔记或日程。\n"
+            f"请如实告知用户没有匹配项，不要虚构任何文件。\n\n"
+        )
+
+    lines = [f"## 日期过滤结果：{date_str} 创建的笔记/日程"]
+    for f in files:
+        name = f.get("name", "")
+        fid = f.get("id", "")
+        ftype = f.get("type", "note")
+        type_label = "日程" if ftype == "event" else "笔记"
+        lines.append(f"{type_label} | {fid} | {name}")
+    lines.append(f"\n以上是数据库中 {date_str} 创建的 {len(files)} 条记录。")
+    lines.append("如果用户要求删除/操作这些笔记，请只操作上面的记录，不要虚构不存在的文件。\n")
+    return "\n".join(lines)
+
+
+async def _build_semantic_context(text: str) -> str:
+    """语义搜索 + 关键词搜索：先用用户文本中的名词做关键词匹配，再用 embedding。
+
+    解决「番茄/西红柿」「好吃的/美食记录」等异名同意的问题。
+    返回空字符串表示没有匹配结果。
+    """
+    # 1. 提取用户文本中的关键词，做字面正则搜索（可靠性更高）
+    #    取 2-4 字长度的中文词作为关键词
+    keywords = set(re.findall(r"[\u4e00-\u9fa5]{2,4}", text))
+    # 去掉常见的功能词
+    stop_words = {"帮我", "找到", "并且", "删掉", "一下", "那个", "这个", "那些", "这些", "删除", "笔记", "日程"}
+    keywords -= stop_words
+
+    keyword_files: list[dict] = []
+    seen_ids: set[str] = set()
+    if keywords:
+        for kw in keywords:
+            results = await crud.find_files_by_filter({"name": {"$regex": kw, "$options": "i"}}, limit=3)
+            for f in results:
+                fid = f.get("id", "")
+                if fid not in seen_ids:
+                    seen_ids.add(fid)
+                    keyword_files.append(f)
+
+    # 2. 语义搜索（embedding）：召回名称不同但语义相关的文件
+    semantic_files = await crud.search_files_semantic(text, top_k=10, threshold=0.55)
+
+    # 3. 合并：关键词匹配优先排在前面（更可靠），语义匹配作为补充
+    semantic_seen = set(seen_ids)
+    combined: list[dict] = list(keyword_files)
+    for f in semantic_files:
+        fid = f.get("id", "")
+        if fid not in seen_ids:
+            seen_ids.add(fid)
+            combined.append(f)
+
+    if not combined:
+        return ""
+
+    keyword_ids = {kf.get("id") for kf in keyword_files}
+
+    lines = ["## 匹配结果"]
+    # 关键词匹配组
+    kw_items = [f for f in combined if f.get("id") in keyword_ids]
+    if kw_items:
+        lines.append("（关键词匹配，字面包含相同文字，可靠性高）")
+        for f in kw_items:
+            ftype = f.get("type", "note")
+            type_label = "日程" if ftype == "event" else "笔记"
+            lines.append(f"{type_label} | {f.get('id')} | {f.get('name')}")
+
+    # 语义匹配组（排除已在关键词组中的）
+    sem_items = [f for f in combined if f.get("id") not in keyword_ids]
+    if sem_items:
+        lines.append("（语义匹配，名称不同但含义相关，仅供参考）")
+        for f in sem_items:
+            ftype = f.get("type", "note")
+            type_label = "日程" if ftype == "event" else "笔记"
+            lines.append(f"{type_label} | {f.get('id')} | {f.get('name')}")
+
+    lines.append(f"\n以上共 {len(combined)} 条可能匹配的记录。")
+    lines.append("**重要**：上面的匹配结果就是根据用户描述从数据库中实际查到的笔记/日程。")
+    lines.append("如果用户说「购物相关的」「关于XX的」等描述性查询，请直接把匹配到的记录作为结果。")
+    lines.append("不要认为需要额外的「主题标记」或「分类系统」——关键词匹配本身就是按内容筛选。\n")
+    return "\n".join(lines)
 
 
 async def parse_command(text: str, target_file_id: str | None = None) -> dict:
@@ -154,8 +311,16 @@ async def parse_command(text: str, target_file_id: str | None = None) -> dict:
     if target_file_id:
         target_context = await _build_target_context(target_file_id)
 
+    # 如果有日期引用，预查询过滤匹配文件
+    date_filtered = await _build_date_filtered_context(text)
+
+    # 语义搜索：用用户原文做 embedding 召回语义相关文件
+    semantic_context = await _build_semantic_context(text)
+
     system_prompt = _SYSTEM_PROMPT_TEMPLATE.format(
-        inventory=inventory or "(空)", now=now, target_context=target_context
+        inventory=inventory or "(空)", now=now, target_context=target_context,
+        date_filtered=date_filtered, semantic_context=semantic_context,
+        date_reference=_build_date_reference(),
     )
     raw = await qwen.chat(system_prompt, text, temperature=0.1)
     cleaned = _strip_code_fence(raw)
@@ -171,13 +336,67 @@ async def parse_command(text: str, target_file_id: str | None = None) -> dict:
     data.setdefault("needs_confirmation", False)
     data.setdefault("summary", "")
 
-    # 删除操作强制要求二次确认，不依赖 LLM 自觉
+    # 删除操作强制要求二次确认（在聊天中完成确认流程）
     if any(step.get("action") == "delete" for step in data["steps"]):
         data["needs_confirmation"] = True
         if not data["summary"]:
             data["summary"] = "计划执行删除操作"
 
     return data
+
+
+async def build_agent_context(text: str, target_file_id: str | None = None) -> str:
+    """构建 TRAE agent 上下文：目录树 + 日期过滤 + 语义搜索 + 目标文件。
+
+    供 chat_stream 的 agent 循环使用，让 LLM 在迭代决策中始终看到最新的上下文。
+    """
+    inventory = await _build_inventory()
+    now = datetime.now().strftime("%Y-%m-%d（周%u）")
+    date_ref = _build_date_reference()
+
+    target_context = ""
+    if target_file_id:
+        target_context = await _build_target_context(target_file_id)
+
+    date_filtered = await _build_date_filtered_context(text)
+    semantic_context = await _build_semantic_context(text)
+
+    parts: list[str] = [f"当前时间：{now}", date_ref]
+    if inventory:
+        parts.append(f"## 目录树\n（格式：类型 | id | 名称 | 创建日期 | 路径）\n{inventory}")
+    if date_filtered:
+        parts.append(date_filtered)
+    if semantic_context:
+        parts.append(semantic_context)
+    if target_context:
+        parts.append(target_context)
+    return "\n\n".join(parts)
+
+
+def _build_date_reference() -> str:
+    """构建未来日期对照表，供 LLM 直接查表换算「下周X」「下下周X」等表达。"""
+    today = datetime.now().date()
+    weekday_names = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
+    today_name = weekday_names[today.weekday()]
+
+    # 找到下周一
+    days_until_monday = (7 - today.weekday()) % 7 or 7
+    next_monday = today + timedelta(days=days_until_monday)
+    # 下下周一
+    next_next_monday = next_monday + timedelta(days=7)
+
+    lines = [f"（今天是 {today.strftime('%Y-%m-%d')} {today_name}）", ""]
+    lines.append("下周：")
+    for i, name in enumerate(weekday_names):
+        date = next_monday + timedelta(days=i)
+        lines.append(f"  下周{name}: {date.strftime('%Y-%m-%d')}")
+    lines.append("")
+    lines.append("下下周：")
+    for i, name in enumerate(weekday_names):
+        date = next_next_monday + timedelta(days=i)
+        lines.append(f"  下下周{name}: {date.strftime('%Y-%m-%d')}")
+
+    return "## 日期参考\n" + "\n".join(lines)
 
 
 def _normalize_steps(steps: list[dict]) -> list[dict]:

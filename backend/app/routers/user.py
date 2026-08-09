@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, HTTPException
 
-from .. import crud
+from .. import pg_ops as crud
 from ..schemas import AddPlaceRequest, UpdateLocationRequest, UserProfileResponse
 
 router = APIRouter(prefix="/api/user", tags=["user"])

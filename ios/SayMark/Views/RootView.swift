@@ -76,19 +76,21 @@ struct RootView: View {
             .ignoresSafeArea()
             .animation(.spring(response: 0.35, dampingFraction: 0.85), value: showChat)
 
-            // 底部中间聊天按钮
-            VStack {
-                Spacer()
-                Button {
-                    showChat = true
-                } label: {
-                    Image(systemName: "bubble.left.and.bubble.right.fill")
-                        .font(.title3)
-                        .foregroundStyle(.white)
-                        .padding(14)
-                        .background(Circle().fill(Color.accentColor).shadow(radius: 4))
+            // 底部中间聊天按钮（进入详情页时隐藏）
+            if !viewModel.hideFloatingButton {
+                VStack {
+                    Spacer()
+                    Button {
+                        showChat = true
+                    } label: {
+                        Image(systemName: "bubble.left.and.bubble.right.fill")
+                            .font(.title3)
+                            .foregroundStyle(.white)
+                            .padding(14)
+                            .background(Circle().fill(Color.accentColor).shadow(radius: 4))
+                    }
+                    .padding(.bottom, 74)  // TabBar 上方
                 }
-                .padding(.bottom, 74)  // TabBar 上方
             }
         }
         .task {

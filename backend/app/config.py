@@ -20,9 +20,8 @@ class Settings(BaseSettings):
     # DashScope（Qwen）API Key
     DASHSCOPE_API_KEY: str = Field(..., description="DashScope API Key")
 
-    # MongoDB 连接配置
-    MONGO_URI: str = Field(..., description="MongoDB 连接字符串")
-    MONGO_DB_NAME: str = Field(..., description="MongoDB 数据库名")
+    # PostgreSQL 连接配置
+    PG_DSN: str = Field(..., description="PostgreSQL DSN，如 postgresql://user:pass@localhost:5432/saymark")
 
     # Qwen 模型配置
     QWEN_MODEL: str = Field(..., description="Qwen 模型名")

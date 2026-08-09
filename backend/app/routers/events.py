@@ -4,7 +4,7 @@ from pydantic import BaseModel
 
 from fastapi import APIRouter, HTTPException
 
-from .. import crud
+from .. import pg_ops as crud
 from ..schemas import FileResponse, MonthSummaryItem
 
 router = APIRouter(prefix="/api/events", tags=["events"])

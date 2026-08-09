@@ -59,6 +59,9 @@ struct CalendarView: View {
             }
             .navigationTitle("日历")
             .navigationBarTitleDisplayMode(.inline)
+            .navigationDestination(for: NoteFile.self) { file in
+                FileDetailView(note: file, viewModel: treeViewModel)
+            }
             .task(id: currentMonth) {
                 await viewModel.loadMonth(year: year(from: currentMonth), month: month(from: currentMonth))
             }
@@ -158,13 +161,15 @@ struct CalendarView: View {
             } else {
                 List {
                     ForEach(viewModel.dayEvents) { event in
-                        EventRow(event: event, onDelete: {
-                            Task {
-                                await viewModel.deleteEvent(id: event.id)
-                                await viewModel.loadMonth(year: year(from: currentMonth), month: month(from: currentMonth))
-                                await viewModel.loadDay(dateString(from: selectedDate))
-                            }
-                        })
+                        NavigationLink(value: event.toNoteFile()) {
+                            EventRow(event: event, onDelete: {
+                                Task {
+                                    await viewModel.deleteEvent(id: event.id)
+                                    await viewModel.loadMonth(year: year(from: currentMonth), month: month(from: currentMonth))
+                                    await viewModel.loadDay(dateString(from: selectedDate))
+                                }
+                            })
+                        }
                     }
                 }
                 .listStyle(.plain)
