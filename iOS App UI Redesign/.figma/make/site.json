@@ -1,0 +1,10 @@
+{
+  "description": "An AI-powered voice notebook that transcribes speech into structured notes, manages files, calendars, and reminders for enhanced productivity.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
