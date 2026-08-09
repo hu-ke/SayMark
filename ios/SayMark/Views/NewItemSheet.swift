@@ -9,22 +9,48 @@ struct NewItemSheet: View {
 
     enum ItemType: String, CaseIterable {
         case folder = "文件夹"
-        case file = "文件"
+        case file = "笔记"
     }
 
-    /// 根目录下仅允许新建文件夹
     private var availableTypes: [ItemType] {
         parentId == nil ? [.folder] : ItemType.allCases
     }
 
     var body: some View {
         NavigationStack {
-            Form {
-                Picker("类型", selection: $type) {
-                    ForEach(availableTypes, id: \.self) { Text($0.rawValue).tag($0) }
+            VStack(spacing: DesignTokens.Spacing.xl) {
+                // 类型选择
+                if availableTypes.count > 1 {
+                    VStack(alignment: .leading, spacing: DesignTokens.Spacing.xs) {
+                        Text("类型")
+                            .font(DesignTokens.Font.caption)
+                            .fontWeight(.medium)
+                            .foregroundStyle(DesignTokens.Color.textSecondary)
+                        Picker("类型", selection: $type) {
+                            ForEach(availableTypes, id: \.self) {
+                                Text($0.rawValue).tag($0)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                    }
                 }
-                TextField("名称", text: $name)
+
+                // 名称
+                VStack(alignment: .leading, spacing: DesignTokens.Spacing.xs) {
+                    Text("名称")
+                        .font(DesignTokens.Font.caption)
+                        .fontWeight(.medium)
+                        .foregroundStyle(DesignTokens.Color.textSecondary)
+                    TextField(
+                        type == .folder ? "文件夹名称" : "笔记名称",
+                        text: $name
+                    )
+                    .textFieldStyle(.roundedBorder)
+                }
             }
+            .padding(.horizontal, DesignTokens.Spacing.lg)
+            .padding(.top, DesignTokens.Spacing.lg)
+            .frame(maxHeight: .infinity, alignment: .top)
             .navigationTitle("新建")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -35,6 +61,7 @@ struct NewItemSheet: View {
                     Button("创建") {
                         Task { await create() }
                     }
+                    .fontWeight(.semibold)
                     .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             }
@@ -48,7 +75,6 @@ struct NewItemSheet: View {
         case .folder:
             await viewModel.createFolder(name: trimmed, parentId: parentId)
         case .file:
-            // 文件必须归属某个文件夹
             guard let pid = parentId else { return }
             await viewModel.createFile(name: trimmed, content: "", parentId: pid)
         }

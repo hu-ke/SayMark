@@ -2,6 +2,7 @@ import Foundation
 import Speech
 import AVFoundation
 import Combine
+import SwiftUI
 
 /// 语音识别器（zh-CN，SFSpeechRecognizer + AVAudioEngine）
 /// 注意：iOS 模拟器对语音识别支持有限，可能无法识别；真机可用。
@@ -221,3 +222,4 @@ final class SpeechRecognizer: ObservableObject {
         wasInterrupted = false
     }
 }
+

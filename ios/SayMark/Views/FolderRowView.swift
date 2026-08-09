@@ -12,9 +12,12 @@ struct FolderRowView: View {
         expanded.contains(node.folder.id)
     }
 
-    /// 统计该文件夹下的文件总数（含子文件夹）
     private var totalFiles: Int {
         countFiles(in: node)
+    }
+
+    private var isEmpty: Bool {
+        node.children.isEmpty && node.files.isEmpty
     }
 
     var body: some View {
@@ -25,26 +28,58 @@ struct FolderRowView: View {
                 else { expanded.remove(node.folder.id) }
             }
         )) {
-            // 子文件夹
-            ForEach(node.children) { child in
-                FolderRowView(node: child, viewModel: viewModel, expanded: $expanded)
-            }
-            // 文件
-            ForEach(node.files) { file in
-                FileRowView(file: file, viewModel: viewModel)
+            if isEmpty {
+                HStack {
+                    Spacer()
+                    Text("空文件夹")
+                        .font(DesignTokens.Font.caption)
+                        .foregroundStyle(DesignTokens.Color.textTertiary)
+                    Spacer()
+                }
+                .padding(.vertical, DesignTokens.Spacing.md)
+            } else {
+                ForEach(node.children) { child in
+                    FolderRowView(node: child, viewModel: viewModel, expanded: $expanded)
+                }
+                ForEach(node.files) { file in
+                    FileRowView(file: file, viewModel: viewModel)
+                }
             }
         } label: {
-            HStack {
-                Image(systemName: "folder")
-                    .foregroundStyle(.tint)
+            HStack(spacing: DesignTokens.Spacing.sm) {
+                Image(systemName: isExpanded ? "folder.fill" : "folder")
+                    .font(.body)
+                    .foregroundStyle(DesignTokens.Color.primary)
+
                 Text(node.folder.name)
+                    .font(DesignTokens.Font.body)
+
                 Spacer()
+
+                if totalFiles > 0 {
+                    Text("\(totalFiles)")
+                        .font(DesignTokens.Font.caption2)
+                        .fontWeight(.medium)
+                        .foregroundStyle(DesignTokens.Color.textSecondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 2)
+                        .background(DesignTokens.Color.bgSecondary)
+                        .clipShape(Capsule())
+                }
             }
+            .padding(.vertical, 2)
         }
         .contextMenu {
-            Button("重命名") { showRename = true }
-            Button("删除", role: .destructive) { showDeleteConfirm = true }
-            Button("新建子项") { showNewSubItem = true }
+            Button { showRename = true } label: {
+                Label("重命名", systemImage: "pencil")
+            }
+            Button { showNewSubItem = true } label: {
+                Label("新建子项", systemImage: "plus")
+            }
+            Divider()
+            Button(role: .destructive) { showDeleteConfirm = true } label: {
+                Label("删除", systemImage: "trash")
+            }
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             Button(role: .destructive) {
@@ -57,7 +92,7 @@ struct FolderRowView: View {
             } label: {
                 Label("重命名", systemImage: "pencil")
             }
-            .tint(.blue)
+            .tint(DesignTokens.Color.primary)
         }
         .sheet(isPresented: $showRename) {
             RenameSheet(initialName: node.folder.name) { newName in

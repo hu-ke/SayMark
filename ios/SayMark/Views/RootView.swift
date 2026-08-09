@@ -6,92 +6,51 @@ struct RootView: View {
     @State private var locateFolderId: String?
     @State private var selectedTab = 0
 
-    // 聊天抽屉
+    // 聊天
     @State private var showChat = false
 
     var body: some View {
-        ZStack {
-            // 主 TabView
-            TabView(selection: $selectedTab) {
-                NavigationStack {
-                    FolderTreeView(viewModel: viewModel, locateFolderId: $locateFolderId)
-                        .navigationTitle("语音记事本")
-                        .toolbar {
-                            ToolbarItemGroup(placement: .navigationBarTrailing) {
-                                Button {
-                                    showNewItem = true
-                                } label: {
-                                    Image(systemName: "plus")
-                                }
+        TabView(selection: $selectedTab) {
+            // Tab 1 — 文件
+            NavigationStack {
+                FolderTreeView(viewModel: viewModel, locateFolderId: $locateFolderId)
+                    .navigationTitle("语音记事本")
+                    .toolbar {
+                        ToolbarItemGroup(placement: .navigationBarTrailing) {
+                            Button { showChat = true } label: {
+                                Image(systemName: "bubble.left.and.bubble.right")
+                                    .symbolVariant(showChat ? .fill : .none)
+                            }
+                            Button { showNewItem = true } label: {
+                                Image(systemName: "plus")
                             }
                         }
-                        .sheet(isPresented: $showNewItem) {
-                            NewItemSheet(viewModel: viewModel, parentId: nil)
-                        }
-                }
+                    }
+                    .sheet(isPresented: $showNewItem) {
+                        NewItemSheet(viewModel: viewModel, parentId: nil)
+                    }
+            }
+            .tabItem {
+                Label("文件", systemImage: "folder")
+            }
+            .tag(0)
+
+            // Tab 2 — 日历
+            CalendarView(treeViewModel: viewModel)
                 .tabItem {
-                    Label("文件", systemImage: "folder")
+                    Label("日历", systemImage: "calendar")
                 }
-                .tag(0)
+                .tag(1)
 
-                CalendarView(treeViewModel: viewModel)
-                    .tabItem {
-                        Label("日历", systemImage: "calendar")
-                    }
-                    .tag(1)
-
-                RemindersView()
-                    .tabItem {
-                        Label("提醒", systemImage: "bell")
-                    }
-                    .tag(2)
-            }
-
-            // 半透明遮罩
-            if showChat {
-                Color.black.opacity(0.3)
-                    .ignoresSafeArea()
-                    .onTapGesture { dismissChat() }
-                    .transition(.opacity)
-            }
-
-            // 聊天抽屉（全屏，从右侧滑入）
-            GeometryReader { geometry in
-                HStack(spacing: 0) {
-                    Spacer()
-                    ChatView()
-                        .frame(width: geometry.size.width)
-                        .background(Color(.systemBackground))
-                        .offset(x: showChat ? 0 : geometry.size.width)
-                        .gesture(
-                            DragGesture(minimumDistance: 20)
-                                .onEnded { value in
-                                    if value.translation.width > 60 {
-                                        dismissChat()
-                                    }
-                                }
-                        )
+            // Tab 3 — 提醒
+            RemindersView()
+                .tabItem {
+                    Label("提醒", systemImage: "bell")
                 }
-            }
-            .ignoresSafeArea()
-            .animation(.spring(response: 0.35, dampingFraction: 0.85), value: showChat)
-
-            // 底部中间聊天按钮（进入详情页时隐藏）
-            if !viewModel.hideFloatingButton {
-                VStack {
-                    Spacer()
-                    Button {
-                        showChat = true
-                    } label: {
-                        Image(systemName: "bubble.left.and.bubble.right.fill")
-                            .font(.title3)
-                            .foregroundStyle(.white)
-                            .padding(14)
-                            .background(Circle().fill(Color.accentColor).shadow(radius: 4))
-                    }
-                    .padding(.bottom, 74)  // TabBar 上方
-                }
-            }
+                .tag(2)
+        }
+        .fullScreenCover(isPresented: $showChat) {
+            ChatView()
         }
         .task {
             await viewModel.loadTree()
@@ -116,12 +75,6 @@ struct RootView: View {
                     await NotificationManager.shared.scheduleNotifications(from: notes)
                 }
             }
-        }
-    }
-
-    private func dismissChat() {
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-            showChat = false
         }
     }
 }

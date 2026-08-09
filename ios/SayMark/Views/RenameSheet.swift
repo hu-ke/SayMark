@@ -4,6 +4,7 @@ struct RenameSheet: View {
     let initialName: String
     let onRename: (String) -> Void
     @State private var name: String
+    @FocusState private var isFocused: Bool
     @Environment(\.dismiss) private var dismiss
 
     init(initialName: String, onRename: @escaping (String) -> Void) {
@@ -14,8 +15,14 @@ struct RenameSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            VStack(spacing: DesignTokens.Spacing.lg) {
                 TextField("名称", text: $name)
+                    .textFieldStyle(.roundedBorder)
+                    .focused($isFocused)
+                    .padding(.horizontal, DesignTokens.Spacing.lg)
+                    .padding(.top, DesignTokens.Spacing.lg)
+
+                Spacer()
             }
             .navigationTitle("重命名")
             .navigationBarTitleDisplayMode(.inline)
@@ -30,9 +37,11 @@ struct RenameSheet: View {
                         onRename(trimmed)
                         dismiss()
                     }
+                    .fontWeight(.semibold)
                     .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             }
+            .onAppear { isFocused = true }
         }
     }
 }

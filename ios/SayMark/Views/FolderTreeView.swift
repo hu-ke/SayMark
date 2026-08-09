@@ -8,7 +8,13 @@ struct FolderTreeView: View {
     var body: some View {
         ZStack {
             if viewModel.loading && viewModel.tree.isEmpty {
-                ProgressView("加载中...")
+                VStack(spacing: DesignTokens.Spacing.lg) {
+                    ProgressView()
+                        .scaleEffect(1.2)
+                    Text("加载中...")
+                        .font(DesignTokens.Font.subheadline)
+                        .foregroundStyle(DesignTokens.Color.textSecondary)
+                }
             } else if let error = viewModel.error, viewModel.tree.isEmpty {
                 ContentUnavailableView {
                     Label("加载失败", systemImage: "exclamationmark.triangle")
@@ -18,6 +24,21 @@ struct FolderTreeView: View {
                     Button("重试") {
                         Task { await viewModel.loadTree() }
                     }
+                    .buttonStyle(.borderedProminent)
+                }
+            } else if viewModel.tree.isEmpty {
+                ContentUnavailableView {
+                    Label("还没有笔记", systemImage: "doc.text")
+                        .font(DesignTokens.Font.title3)
+                } description: {
+                    Text("点击右上角 + 创建文件夹和笔记\n或长按录音按钮开始语音记录")
+                } actions: {
+                    Button {
+                        Task { await viewModel.loadTree() }
+                    } label: {
+                        Text("刷新")
+                    }
+                    .buttonStyle(.borderedProminent)
                 }
             } else {
                 List {
@@ -25,19 +46,9 @@ struct FolderTreeView: View {
                         FolderRowView(node: node, viewModel: viewModel, expanded: $expanded)
                     }
                 }
-                .listStyle(.insetGrouped)
+                .listStyle(.plain)
                 .refreshable {
                     await viewModel.loadTree()
-                }
-                .toolbar {
-                    ToolbarItem(placement: .navigationBarTrailing) {
-                        Button {
-                            Task { await viewModel.loadTree() }
-                        } label: {
-                            Image(systemName: "arrow.clockwise")
-                        }
-                        .disabled(viewModel.loading)
-                    }
                 }
             }
         }
@@ -59,7 +70,6 @@ struct FolderTreeView: View {
         }
     }
 
-    /// 展开到目标文件夹（展开其全部祖先）
     private func expand(to folderId: String) {
         guard let path = findPath(in: viewModel.tree, target: folderId) else { return }
         for id in path {
@@ -67,12 +77,9 @@ struct FolderTreeView: View {
         }
     }
 
-    /// 查找从根到目标文件夹的路径（返回目标所有祖先的 id）
     private func findPath(in nodes: [TreeNode], target: String) -> [String]? {
         for node in nodes {
-            if node.folder.id == target {
-                return []
-            }
+            if node.folder.id == target { return [] }
             if let sub = findPath(in: node.children, target: target) {
                 return [node.folder.id] + sub
             }

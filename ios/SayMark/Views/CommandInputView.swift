@@ -8,58 +8,68 @@ struct CommandInputView: View {
     @State private var resultMessage: String?
     @State private var resultSuccess: Bool = false
     @State private var isSending = false
-    /// 待确认指令：收到 confirm_required 时暂存 confirmation_id 与提示文案
     @State private var pendingConfirmationId: String?
     @State private var pendingConfirmationMessage: String = ""
+    @FocusState private var isFocused: Bool
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 16) {
-                HStack(alignment: .bottom) {
-                    TextField("说话或输入文字，例如：明天下午3点面试 / 定位到工作文件夹", text: $inputText, axis: .vertical)
-                        .textFieldStyle(.roundedBorder)
-                        .lineLimit(1...4)
-                    VoiceRecordButton(
-                        onSend: { text in
-                            inputText = text
-                        }
-                    )
-                }
-                .padding(.horizontal)
-
-                Button {
-                    Task { await sendCommand() }
-                } label: {
-                    Text(isSending ? "发送中..." : "发送")
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.accentColor)
-                        .foregroundStyle(.white)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                }
-                .disabled(inputText.trimmingCharacters(in: .whitespaces).isEmpty || isSending)
-                .padding(.horizontal)
-
+            VStack(spacing: 0) {
+                // 结果反馈
                 if let resultMessage = resultMessage {
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Image(systemName: resultSuccess ? "checkmark.circle.fill" : "xmark.circle.fill")
-                                .foregroundStyle(resultSuccess ? .green : .red)
-                            Text(resultSuccess ? "成功" : "失败")
-                                .font(.headline)
-                        }
-                        Text(resultMessage)
-                            .font(.body)
-                    }
-                    .padding()
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.gray.opacity(0.12))
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .padding(.horizontal)
+                    resultBanner
+                        .transition(.move(edge: .top).combined(with: .opacity))
                 }
 
-                Spacer()
+                // 提示区域
+                VStack(spacing: DesignTokens.Spacing.md) {
+                    Spacer()
+                    ZStack {
+                        Circle()
+                            .fill(DesignTokens.Color.primaryBg)
+                            .frame(width: 64, height: 64)
+                        Image(systemName: "waveform")
+                            .font(.system(size: 28))
+                            .foregroundStyle(DesignTokens.Color.primary)
+                    }
+                    Text("语音或文字输入")
+                        .font(DesignTokens.Font.headline)
+                    Text("你可以说：明天下午3点面试\n或：定位到工作文件夹")
+                        .font(DesignTokens.Font.subheadline)
+                        .foregroundStyle(DesignTokens.Color.textSecondary)
+                        .multilineTextAlignment(.center)
+                    Spacer()
+                }
+
+                // 底部输入区域
+                VStack(spacing: DesignTokens.Spacing.xs) {
+                    Divider()
+                    HStack(alignment: .bottom, spacing: DesignTokens.Spacing.sm) {
+                        VoiceRecordButton(
+                            onSend: { text in inputText = text }
+                        )
+
+                        TextField("说话或输入文字...", text: $inputText, axis: .vertical)
+                            .textFieldStyle(.roundedBorder)
+                            .lineLimit(1...4)
+                            .focused($isFocused)
+
+                        if !inputText.trimmingCharacters(in: .whitespaces).isEmpty {
+                            Button {
+                                Task { await sendCommand() }
+                            } label: {
+                                Image(systemName: "arrow.up.circle.fill")
+                                    .font(.title2)
+                                    .foregroundStyle(DesignTokens.Color.primary)
+                            }
+                            .disabled(isSending)
+                        }
+                    }
+                    .padding(.horizontal, DesignTokens.Spacing.md)
+                    .padding(.vertical, DesignTokens.Spacing.sm)
+                }
+                .background(.regularMaterial)
             }
             .navigationTitle("语音输入")
             .navigationBarTitleDisplayMode(.inline)
@@ -68,30 +78,55 @@ struct CommandInputView: View {
                     Button("关闭") { dismiss() }
                 }
             }
+            .animation(.easeInOut(duration: 0.25), value: resultMessage != nil)
         }
-            .confirmationDialog(
-                "请确认执行",
-                isPresented: Binding(
-                    get: { pendingConfirmationId != nil },
-                    set: { if !$0 { pendingConfirmationId = nil } }
-                ),
-                titleVisibility: .visible
-            ) {
-                Button("确认执行") {
-                    guard let cid = pendingConfirmationId else { return }
-                    pendingConfirmationId = nil
-                    Task { await runConfirmation(id: cid, confirmed: true) }
-                }
-                Button("取消", role: .cancel) {
-                    let cid = pendingConfirmationId
-                    pendingConfirmationId = nil
-                    if let cid = cid {
-                        Task { await runConfirmation(id: cid, confirmed: false) }
-                    }
-                }
-            } message: {
-                Text(pendingConfirmationMessage)
+        .confirmationDialog(
+            "请确认执行",
+            isPresented: Binding(
+                get: { pendingConfirmationId != nil },
+                set: { if !$0 { pendingConfirmationId = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("确认执行") {
+                guard let cid = pendingConfirmationId else { return }
+                pendingConfirmationId = nil
+                Task { await runConfirmation(id: cid, confirmed: true) }
             }
+            Button("取消", role: .cancel) {
+                let cid = pendingConfirmationId
+                pendingConfirmationId = nil
+                if let cid = cid {
+                    Task { await runConfirmation(id: cid, confirmed: false) }
+                }
+            }
+        } message: {
+            Text(pendingConfirmationMessage)
+        }
+    }
+
+    private var resultBanner: some View {
+        HStack(spacing: DesignTokens.Spacing.sm) {
+            Image(systemName: resultSuccess ? "checkmark.circle.fill" : "xmark.circle.fill")
+                .foregroundStyle(resultSuccess ? DesignTokens.Color.success : DesignTokens.Color.error)
+            Text(resultMessage ?? "")
+                .font(DesignTokens.Font.subheadline)
+            Spacer()
+            Button {
+                withAnimation { resultMessage = nil }
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.caption2)
+                    .foregroundStyle(DesignTokens.Color.textSecondary)
+            }
+        }
+        .padding(.horizontal, DesignTokens.Spacing.lg)
+        .padding(.vertical, DesignTokens.Spacing.md)
+        .background(
+            resultSuccess
+                ? DesignTokens.Color.success.opacity(0.1)
+                : DesignTokens.Color.error.opacity(0.1)
+        )
     }
 
     private func sendCommand() async {
@@ -101,7 +136,6 @@ struct CommandInputView: View {
         defer { isSending = false }
         do {
             let result = try await APIClient.shared.sendCommand(text: text)
-            // 需要确认：弹框让用户确认
             if result.action == "confirm_required" {
                 if let dict = result.data?.dictionaryValue,
                    let cid = dict["confirmation_id"] as? String {
@@ -124,9 +158,7 @@ struct CommandInputView: View {
         isSending = true
         defer { isSending = false }
         do {
-            let result = try await APIClient.shared.confirmCommand(
-                confirmationId: id, confirmed: confirmed
-            )
+            let result = try await APIClient.shared.confirmCommand(confirmationId: id, confirmed: confirmed)
             handleResult(result)
         } catch {
             resultMessage = error.localizedDescription
@@ -134,11 +166,10 @@ struct CommandInputView: View {
         }
     }
 
-    /// 统一处理执行结果（展示文案 + 刷新/定位）
     private func handleResult(_ result: CommandResult) {
-        resultMessage = result.message
-        resultSuccess = result.success
+        withAnimation { resultMessage = result.message; resultSuccess = result.success }
         if result.success {
+            inputText = ""
             if result.action == "locate_folder" {
                 if let dict = result.data?.dictionaryValue,
                    let folderId = dict["folder_id"] as? String {

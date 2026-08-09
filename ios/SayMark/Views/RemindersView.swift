@@ -8,12 +8,19 @@ struct RemindersView: View {
         NavigationStack {
             Group {
                 if viewModel.loading {
-                    ProgressView("加载中...")
+                    VStack(spacing: DesignTokens.Spacing.md) {
+                        ProgressView()
+                            .scaleEffect(1.2)
+                        Text("加载中...")
+                            .font(DesignTokens.Font.subheadline)
+                            .foregroundStyle(DesignTokens.Color.textSecondary)
+                    }
                 } else if viewModel.reminders.isEmpty {
                     ContentUnavailableView {
                         Label("暂无提醒", systemImage: "bell.slash")
+                            .font(DesignTokens.Font.title3)
                     } description: {
-                        Text("还没有设置任何日程提醒")
+                        Text("还没有设置任何日程提醒\n创建日程时设置提醒时间即可")
                     }
                 } else {
                     List {
@@ -52,55 +59,58 @@ private struct ReminderRow: View {
     @State private var showCancelConfirm = false
 
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "bell.fill")
-                .foregroundStyle(.orange)
-                .font(.title3)
+        HStack(spacing: DesignTokens.Spacing.md) {
+            // 图标
+            ZStack {
+                Circle()
+                    .fill(DesignTokens.Color.accentBg)
+                    .frame(width: 36, height: 36)
+                Image(systemName: "bell.fill")
+                    .font(.system(size: 14))
+                    .foregroundStyle(DesignTokens.Color.accent)
+            }
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(event.title)
-                    .font(.body)
+                    .font(DesignTokens.Font.body)
                     .fontWeight(.medium)
 
-                HStack(spacing: 8) {
-                    // 日期时间
-                    HStack(spacing: 2) {
-                        Image(systemName: "calendar")
-                            .font(.caption2)
-                        Text(event.date)
-                            .font(.caption)
-                        if !event.time.isEmpty {
-                            Text(event.time)
-                                .font(.caption)
-                        }
-                    }
-                    .foregroundStyle(.secondary)
-
-                    // 提前多少分钟
-                    if let mins = event.reminderMinutes {
-                        Text("提前\(mins)分钟")
-                            .font(.caption)
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Color.orange.opacity(0.8))
-                            .clipShape(Capsule())
+                HStack(spacing: DesignTokens.Spacing.sm) {
+                    Image(systemName: "calendar")
+                        .font(.caption2)
+                        .foregroundStyle(DesignTokens.Color.textTertiary)
+                    Text(event.date)
+                        .font(DesignTokens.Font.caption)
+                    if !event.time.isEmpty {
+                        Text(event.time)
+                            .font(DesignTokens.Font.caption)
                     }
                 }
+                .foregroundStyle(DesignTokens.Color.textSecondary)
             }
 
             Spacer()
+
+            if let mins = event.reminderMinutes {
+                Text("提前\(mins)分钟")
+                    .font(DesignTokens.Font.caption2)
+                    .foregroundStyle(DesignTokens.Color.accent)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 2)
+                    .background(DesignTokens.Color.accentBg)
+                    .clipShape(Capsule())
+            }
 
             Button {
                 showCancelConfirm = true
             } label: {
                 Image(systemName: "bell.slash")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(DesignTokens.Color.textTertiary)
             }
             .buttonStyle(.plain)
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, DesignTokens.Spacing.xs)
         .confirmationDialog(
             "取消提醒？",
             isPresented: $showCancelConfirm,
@@ -126,7 +136,6 @@ final class RemindersViewModel: ObservableObject {
         loading = true
         do {
             reminders = try await api.getReminders()
-            // 同步到本地通知
             if let notes = try? await api.getReminderNotes() {
                 await NotificationManager.shared.scheduleNotifications(from: notes)
             }
@@ -140,7 +149,6 @@ final class RemindersViewModel: ObservableObject {
         do {
             try await api.cancelReminder(id: id)
             reminders.removeAll { $0.id == id }
-            // 重新同步本地通知
             if let notes = try? await api.getReminderNotes() {
                 await NotificationManager.shared.scheduleNotifications(from: notes)
             }

@@ -7,63 +7,57 @@ struct ChatView: View {
     @FocusState private var isFocused: Bool
     @State private var showHistory = false
     @Namespace private var bottomID
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
-            ZStack {
-                VStack(spacing: 0) {
-                    // 消息列表
-                    ScrollViewReader { proxy in
-                        ScrollView {
-                            LazyVStack(spacing: 12) {
-                                if viewModel.messages.isEmpty {
-                                    emptyPrompt.padding(.top, 60)
-                                }
-                                ForEach(viewModel.messages) { msg in
+            VStack(spacing: 0) {
+                // 消息列表
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(spacing: DesignTokens.Spacing.md) {
+                            if viewModel.messages.isEmpty {
+                                emptyPrompt.padding(.top, 80)
+                            }
+                            ForEach(viewModel.messages) { msg in
                                 MessageBubble(message: msg, onToggle: {
                                     if let idx = viewModel.messages.firstIndex(where: { $0.id == msg.id }) {
                                         viewModel.messages[idx].isExpanded.toggle()
                                     }
                                 })
-                                    .id(msg.id)
+                                .id(msg.id)
                             }
-                                Color.clear.frame(height: 1).id(bottomID)
-                            }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
+                            Color.clear.frame(height: 1).id(bottomID)
                         }
-                        .onChange(of: viewModel.messages.count) { _, _ in
-                            scrollToBottom(proxy)
-                        }
-                        .onChange(of: viewModel.messages.last?.content ?? "") { _, _ in
-                            scrollToBottom(proxy)
-                        }
+                        .padding(.horizontal, DesignTokens.Spacing.md)
+                        .padding(.vertical, DesignTokens.Spacing.sm)
                     }
-
-                    Divider()
-                    inputBar
+                    .onChange(of: viewModel.messages.count) { _, _ in scrollToBottom(proxy) }
+                    .onChange(of: viewModel.messages.last?.content ?? "") { _, _ in scrollToBottom(proxy) }
                 }
 
-                // 历史会话侧边栏
-                if showHistory {
-                    historySidebar
-                }
+                Divider()
+                inputBar
             }
+            .navigationTitle("SayMark AI")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.25)) { showHistory.toggle() }
-                    } label: {
-                        Image(systemName: "line.3.horizontal")
+                    Button { dismiss() } label: {
+                        Image(systemName: "xmark")
+                            .font(.body.weight(.medium))
+                            .foregroundStyle(DesignTokens.Color.textSecondary)
                     }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    if viewModel.hasActiveConversation {
-                        Button {
-                            viewModel.newConversation()
-                        } label: {
-                            Image(systemName: "square.and.pencil")
+                    HStack(spacing: DesignTokens.Spacing.lg) {
+                        Button { withAnimation(.easeInOut(duration: 0.25)) { showHistory.toggle() } } label: {
+                            Image(systemName: "clock.arrow.circlepath")
+                        }
+                        if viewModel.hasActiveConversation {
+                            Button { viewModel.newConversation() } label: {
+                                Image(systemName: "square.and.pencil")
+                            }
                         }
                     }
                 }
@@ -76,30 +70,28 @@ struct ChatView: View {
             } message: {
                 Text(viewModel.error ?? "")
             }
+            .sheet(isPresented: $showHistory) {
+                historySheet
+            }
         }
     }
 
-    // MARK: - 输入栏（语音 + 文字）
+    // MARK: - 输入栏
 
     private var inputBar: some View {
-        VStack(spacing: 4) {
-            HStack(alignment: .bottom, spacing: 8) {
-                // 话筒按钮（按住录音）
+        VStack(spacing: DesignTokens.Spacing.xs) {
+            HStack(alignment: .bottom, spacing: DesignTokens.Spacing.sm) {
                 VoiceRecordButton(
-                    onSend: { text in
-                        viewModel.send(text)
-                    }
+                    onSend: { text in viewModel.send(text) }
                 )
                 .disabled(viewModel.isStreaming)
 
-                // 文字输入
-                TextField(viewModel.isStreaming ? "AI 正在回复..." : "或输入文字...", text: $inputText, axis: .vertical)
+                TextField(viewModel.isStreaming ? "AI 正在回复..." : "输入消息...", text: $inputText, axis: .vertical)
                     .textFieldStyle(.roundedBorder)
                     .lineLimit(1...5)
                     .focused($isFocused)
                     .disabled(viewModel.isStreaming)
 
-                // 发送按钮（有文字时显示）
                 if !inputText.trimmingCharacters(in: .whitespaces).isEmpty {
                     Button {
                         let text = inputText
@@ -108,46 +100,27 @@ struct ChatView: View {
                     } label: {
                         Image(systemName: "arrow.up.circle.fill")
                             .font(.title2)
-                            .foregroundColor(.accentColor)
+                            .foregroundStyle(DesignTokens.Color.primary)
                     }
                     .disabled(viewModel.isStreaming)
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .padding(.horizontal, DesignTokens.Spacing.md)
+            .padding(.vertical, DesignTokens.Spacing.sm)
         }
     }
 
-    // MARK: - 历史会话侧边栏
+    // MARK: - 历史会话
 
-    private var historySidebar: some View {
-        HStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 0) {
-                // 头部
-                HStack {
-                    Text("历史会话")
-                        .font(.headline)
-                    Spacer()
-                    Button {
-                        viewModel.newConversation()
-                        showHistory = false
-                    } label: {
-                        Image(systemName: "square.and.pencil")
-                            .font(.title3)
-                    }
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-
-                Divider()
-
+    private var historySheet: some View {
+        NavigationStack {
+            Group {
                 if viewModel.conversations.isEmpty {
-                    VStack(spacing: 8) {
-                        Text("暂无历史会话")
-                            .foregroundStyle(.secondary)
-                            .padding(.top, 40)
+                    ContentUnavailableView {
+                        Label("暂无历史会话", systemImage: "bubble.left.and.bubble.right")
+                    } description: {
+                        Text("开始对话后会自动保存")
                     }
-                    .frame(maxWidth: .infinity)
                 } else {
                     List {
                         ForEach(viewModel.conversations) { conv in
@@ -155,49 +128,55 @@ struct ChatView: View {
                                 viewModel.switchToConversation(conv)
                                 showHistory = false
                             } label: {
-                                VStack(alignment: .leading, spacing: 4) {
+                                VStack(alignment: .leading, spacing: DesignTokens.Spacing.xs) {
                                     Text(conv.title)
-                                        .font(.body)
+                                        .font(DesignTokens.Font.body)
                                         .fontWeight(.medium)
-                                        .foregroundStyle(.primary)
+                                        .foregroundStyle(DesignTokens.Color.textPrimary)
                                     Text(conv.preview)
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
+                                        .font(DesignTokens.Font.caption)
+                                        .foregroundStyle(DesignTokens.Color.textSecondary)
                                         .lineLimit(1)
                                 }
-                                .padding(.vertical, 4)
+                                .padding(.vertical, DesignTokens.Spacing.xs)
                             }
                         }
                     }
                     .listStyle(.plain)
                 }
             }
-            .frame(width: UIScreen.main.bounds.width * 0.75)
-            .background(Color(.systemBackground))
-            .shadow(radius: 5)
-
-            // 右侧点击区域（点击关闭）
-            Color.black.opacity(0.3)
-                .onTapGesture {
-                    withAnimation(.easeInOut(duration: 0.25)) { showHistory = false }
+            .navigationTitle("历史会话")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("完成") { showHistory = false }
                 }
+            }
         }
-        .transition(.move(edge: .leading))
     }
 
     // MARK: - 空态
 
     private var emptyPrompt: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "bubble.left.and.bubble.right")
-                .font(.system(size: 40))
-                .foregroundStyle(.tertiary)
-            Text("开始对话")
-                .font(.headline)
-            Text("你可以和我聊天，我会记住上下文。\n也可以问我关于笔记和日程的问题。")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+        VStack(spacing: DesignTokens.Spacing.md) {
+            ZStack {
+                Circle()
+                    .fill(DesignTokens.Color.primaryBg)
+                    .frame(width: 72, height: 72)
+                Image(systemName: "bubble.left.and.bubble.right")
+                    .font(.system(size: 30))
+                    .foregroundStyle(DesignTokens.Color.primary)
+            }
+            Text("SayMark AI")
+                .font(DesignTokens.Font.title2)
+            Text("你可以和我聊天，我会记住上下文。\n也可以让我帮你管理笔记和日程。")
+                .font(DesignTokens.Font.subheadline)
+                .foregroundStyle(DesignTokens.Color.textSecondary)
                 .multilineTextAlignment(.center)
+            Text("试试说：「帮我整理一下今天的笔记」")
+                .font(DesignTokens.Font.caption)
+                .foregroundStyle(DesignTokens.Color.textTertiary)
+                .padding(.top, DesignTokens.Spacing.xs)
         }
     }
 
@@ -206,7 +185,8 @@ struct ChatView: View {
     }
 }
 
-/// 消息气泡
+// MARK: - 消息气泡
+
 private struct MessageBubble: View {
     let message: ChatMessage
     var onToggle: (() -> Void)? = nil
@@ -221,7 +201,6 @@ private struct MessageBubble: View {
         }
     }
 
-    /// 可折叠的思考卡片（Trae Agent 风格）
     private var thinkingGroupCard: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
@@ -229,27 +208,26 @@ private struct MessageBubble: View {
                     HStack(spacing: 6) {
                         Image(systemName: message.isExpanded ? "chevron.down" : "chevron.right")
                             .font(.caption2)
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(DesignTokens.Color.accent)
                         Image(systemName: "brain.head.profile")
                             .font(.caption)
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(DesignTokens.Color.accent)
                         Text(message.content)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .font(DesignTokens.Font.caption)
+                            .foregroundStyle(DesignTokens.Color.textSecondary)
                         Spacer()
                         Text("\(message.steps.count)步")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary.opacity(0.6))
+                            .font(DesignTokens.Font.caption2)
+                            .foregroundStyle(DesignTokens.Color.textTertiary)
                     }
                 }
                 .buttonStyle(.plain)
 
                 if message.isExpanded {
-                    // 实时思考文本（AI 推理的打字机效果）
                     if !message.liveText.isEmpty {
                         Text(message.liveText)
-                            .font(.caption2)
-                            .foregroundStyle(.orange.opacity(0.9))
+                            .font(DesignTokens.Font.caption2)
+                            .foregroundStyle(DesignTokens.Color.accent.opacity(0.9))
                             .padding(.leading, 4)
                             .padding(.top, 2)
                     }
@@ -258,8 +236,8 @@ private struct MessageBubble: View {
                         VStack(alignment: .leading, spacing: 2) {
                             ForEach(message.steps, id: \.self) { step in
                                 Text(step)
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary.opacity(0.8))
+                                    .font(DesignTokens.Font.caption2)
+                                    .foregroundStyle(DesignTokens.Color.textSecondary.opacity(0.8))
                                     .padding(.leading, 4)
                             }
                         }
@@ -270,32 +248,30 @@ private struct MessageBubble: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .background(Color.gray.opacity(0.06))
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .background(DesignTokens.Color.bgSecondary)
+            .clipShape(RoundedRectangle(cornerRadius: DesignTokens.CornerRadius.sm))
             Spacer(minLength: 60)
         }
     }
 
-    /// 思考过程气泡（灰色，小字，可展开）
     private var thinkingBubble: some View {
         HStack {
-            HStack(spacing: 8) {
+            HStack(spacing: DesignTokens.Spacing.sm) {
                 Image(systemName: "brain.head.profile")
                     .font(.caption)
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(DesignTokens.Color.accent)
                 Text(message.content)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(DesignTokens.Font.caption)
+                    .foregroundStyle(DesignTokens.Color.textSecondary)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(Color.gray.opacity(0.08))
+            .padding(.horizontal, DesignTokens.Spacing.md)
+            .padding(.vertical, DesignTokens.Spacing.sm)
+            .background(DesignTokens.Color.bgSecondary)
             .clipShape(RoundedRectangle(cornerRadius: 10))
             Spacer(minLength: 60)
         }
     }
 
-    /// 普通对话气泡
     private var chatBubble: some View {
         HStack(alignment: .top) {
             if message.role == .user { Spacer(minLength: 60) }
@@ -304,9 +280,15 @@ private struct MessageBubble: View {
                 Text(message.content)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
-                    .background(message.role == .user ? Color.accentColor : Color.gray.opacity(0.15))
-                    .foregroundStyle(message.role == .user ? .white : .primary)
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .background(
+                        message.role == .user
+                            ? DesignTokens.Color.primary
+                            : DesignTokens.Color.bgSecondary
+                    )
+                    .foregroundStyle(
+                        message.role == .user ? .white : DesignTokens.Color.textPrimary
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: DesignTokens.CornerRadius.lg))
                     .textSelection(.enabled)
 
                 if message.isStreaming {
