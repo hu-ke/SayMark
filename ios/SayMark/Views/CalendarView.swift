@@ -1,280 +1,365 @@
 import SwiftUI
 
-/// 日历视图：月历 + 选中日的日程列表
 struct CalendarView: View {
-    @StateObject private var viewModel = CalendarEventViewModel()
     @ObservedObject var treeViewModel: FolderTreeViewModel
+    @StateObject private var viewModel = CalendarEventViewModel()
 
-    @State private var selectedDate: Date = Date()
-    @State private var currentMonth: Date = Date()
+    @State private var selectedDay: Int?
+    @State private var currentMonth: Date = Calendar.current.startOfMonth(for: Date()) ?? Date()
+    @State private var showDeleteAlert = false
+    @State private var deleteEventId: String?
+    @State private var deleteEventTitle: String?
 
-    private let calendar = Calendar.current
-
-    /// 当前月份的日期（含前后填充）
-    private var daysInMonth: [Date?] {
-        guard let range = calendar.range(of: .day, in: .month, for: currentMonth),
-              let firstDay = calendar.date(from: calendar.dateComponents([.year, .month], from: currentMonth))
-        else { return [] }
-
-        let firstWeekday = calendar.component(.weekday, from: firstDay) - 1       // 0=Sun..6=Sat
-        let offset = (firstWeekday + 6) % 7  // 转为周一开头：0=Mon..6=Sun
-        let totalSlots = offset + range.count
-        let paddedTo = Int(ceil(Double(totalSlots) / 7.0)) * 7
-
-        var days: [Date?] = Array(repeating: nil, count: offset)
-        for day in range {
-            days.append(calendar.date(byAdding: .day, value: day - 1, to: firstDay))
-        }
-        while days.count < paddedTo {
-            days.append(nil)
-        }
-        return days
-    }
+    // MARK: - Weekday labels
+    private let weekDays = ["一", "二", "三", "四", "五", "六", "日"]
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                // 月份切换
-                monthHeader
-                // 星期头
-                weekdayHeader
-                // 日期网格
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 7), spacing: 4) {
-                    ForEach(Array(daysInMonth.enumerated()), id: \.offset) { _, date in
-                        if let date = date {
-                            dayCell(for: date)
-                        } else {
-                            Color.clear
-                                .frame(height: 36)
+                // 导航栏
+                HStack {
+                    Spacer()
+                    Text("日历")
+                        .font(.system(size: 17, weight: .semibold))
+                        .kerning(-0.41)
+                    Spacer()
+                }
+                .frame(height: 44)
+                .background(
+                    UIConstants.background.opacity(0.82)
+                        .background(Material.ultraThin)
+                )
+                .overlay(alignment: .bottom) {
+                    HDSeparator()
+                }
+
+                // 月份选择器
+                HStack {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            currentMonth = Calendar.current.date(byAdding: .month, value: -1, to: currentMonth) ?? currentMonth
                         }
+                        selectedDay = nil
+                        Task { await loadMonth() }
+                    } label: {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 20, weight: .medium))
+                            .foregroundColor(UIConstants.blue)
+                    }
+
+                    Spacer()
+
+                    Text(monthYearString(from: currentMonth))
+                        .font(.system(size: 17, weight: .semibold))
+                        .kerning(-0.41)
+
+                    Spacer()
+
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            currentMonth = Calendar.current.date(byAdding: .month, value: 1, to: currentMonth) ?? currentMonth
+                        }
+                        selectedDay = nil
+                        Task { await loadMonth() }
+                    } label: {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 20, weight: .medium))
+                            .foregroundColor(UIConstants.blue)
                     }
                 }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 10)
 
-                Divider()
+                // 日历网格
+                VStack(spacing: 0) {
+                    // 星期头
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 7), spacing: 0) {
+                        ForEach(weekDays, id: \.self) { day in
+                            Text(day)
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(UIConstants.label3)
+                                .frame(height: 24)
+                        }
+                    }
+                    .padding(.horizontal, 12)
 
-                // 选中日的日程列表
-                eventList
-            }
-            .navigationTitle("日历")
-            .navigationBarTitleDisplayMode(.inline)
-            .navigationDestination(for: NoteFile.self) { file in
-                FileDetailView(note: file, viewModel: treeViewModel)
-            }
-            .task(id: currentMonth) {
-                await viewModel.loadMonth(year: year(from: currentMonth), month: month(from: currentMonth))
-            }
-            .task(id: selectedDate) {
-                await viewModel.loadDay(dateString(from: selectedDate))
-            }
-        }
-    }
+                    // 日期网格
+                    let days = generateDays(for: currentMonth)
+                    ForEach(0..<days.count / 7, id: \.self) { week in
+                        LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 7), spacing: 0) {
+                            ForEach(0..<7, id: \.self) { dayIndex in
+                                let i = week * 7 + dayIndex
+                                if i < days.count, let day = days[i] {
+                                    calendarDayCell(day: day)
+                                } else {
+                                    Color.clear.frame(height: 44)
+                                }
+                            }
+                        }
+                        .padding(.horizontal, 12)
+                    }
+                }
+                .padding(.bottom, 4)
+                .background(UIConstants.card)
 
-    // MARK: - 子视图
+                // 分隔线
+                HDSeparator()
 
-    private var monthHeader: some View {
-        HStack {
-            Button {
-                withAnimation { currentMonth = calendar.date(byAdding: .month, value: -1, to: currentMonth)! }
-            } label: {
-                Image(systemName: "chevron.left")
-            }
-            Spacer()
-            Text(monthFormatter.string(from: currentMonth))
-                .font(.headline)
-            Spacer()
-            Button {
-                withAnimation { currentMonth = calendar.date(byAdding: .month, value: 1, to: currentMonth)! }
-            } label: {
-                Image(systemName: "chevron.right")
-            }
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 10)
-    }
+                // 事件列表
+                if let day = selectedDay, !viewModel.dayEvents.isEmpty {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 0) {
+                            HStack {
+                                Text("\(Calendar.current.component(.month, from: currentMonth))月\(day)日")
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundColor(UIConstants.label)
+                                Spacer()
+                            }
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 12)
 
-    private var weekdayHeader: some View {
-        let weekdays = ["一", "二", "三", "四", "五", "六", "日"]
-        return HStack {
-            ForEach(weekdays, id: \.self) { day in
-                Text(day)
-                    .font(.caption)
-                    .fontWeight(.medium)
-                    .foregroundStyle(.secondary)
+                            VStack(spacing: 10) {
+                                ForEach(viewModel.dayEvents) { event in
+                                    eventRow(event: event)
+                                }
+                            }
+                            .padding(.horizontal, 16)
+
+                            Color.clear.frame(height: 20)
+                        }
+                    }
+                    .background(UIConstants.background)
+                } else if selectedDay != nil && viewModel.dayEvents.isEmpty {
+                    VStack {
+                        Spacer()
+                        Text("暂无日程")
+                            .font(.system(size: 15))
+                            .foregroundColor(UIConstants.label3)
+                        Spacer()
+                    }
                     .frame(maxWidth: .infinity)
-            }
-        }
-        .padding(.horizontal, 8)
-        .padding(.bottom, 4)
-    }
-
-    private func dayCell(for date: Date) -> some View {
-        let dateStr = dateString(from: date)
-        let hasEvents = viewModel.eventDates.contains(dateStr)
-        let isSelected = calendar.isDate(date, inSameDayAs: selectedDate)
-        let isToday = calendar.isDateInToday(date)
-        let isCurrentMonth = calendar.isDate(date, equalTo: currentMonth, toGranularity: .month)
-
-        return Button {
-            selectedDate = date
-        } label: {
-            VStack(spacing: 1) {
-                Text("\(calendar.component(.day, from: date))")
-                    .font(.system(size: 14, weight: isToday ? .bold : .regular))
-                    .frame(width: 28, height: 28)
-                    .background(
-                        Circle()
-                            .fill(isSelected ? Color.accentColor : Color.clear)
-                    )
-                    .foregroundStyle(
-                        isSelected ? .white
-                        : isToday ? .accentColor
-                        : isCurrentMonth ? .primary
-                        : .secondary
-                    )
-                if hasEvents {
-                    Circle()
-                        .fill(Color.orange)
-                        .frame(width: 5, height: 5)
+                    .background(UIConstants.background)
+                } else {
+                    Color(UIConstants.background)
                 }
             }
-            .frame(height: 40)
+            .background(UIConstants.background)
+        }
+        .task {
+            await loadMonth()
+        }
+        .confirmationDialog("确定删除", isPresented: $showDeleteAlert) {
+            Button("删除", role: .destructive) {
+                if let id = deleteEventId {
+                    Task { await viewModel.deleteEvent(eventId: id) }
+                }
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            if let title = deleteEventTitle {
+                Text("将删除日程「\(title)」。")
+            }
+        }
+    }
+
+    // MARK: - Calendar Day Cell
+    private func calendarDayCell(day: Int) -> some View {
+        let today = Calendar.current.isDateInToday(
+            Calendar.current.date(bySetting: .day, value: day, of: currentMonth) ?? Date()
+        )
+        let isSelected = day == selectedDay
+        let hasEvent = viewModel.eventDays.contains(day)
+
+        return VStack(spacing: 3) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    if isSelected {
+                        selectedDay = nil
+                    } else {
+                        selectedDay = day
+                    }
+                }
+                Task {
+                    await loadDay(day)
+                }
+            } label: {
+                Text("\(day)")
+                    .font(.system(size: 14, weight: today ? .bold : .regular))
+                    .foregroundColor(isSelected ? .white : today ? UIConstants.blue : UIConstants.label)
+                    .frame(width: 32, height: 32)
+                    .background(
+                        Group {
+                            if isSelected {
+                                Circle().fill(UIConstants.blue)
+                            } else if today {
+                                Circle()
+                                    .stroke(UIConstants.blue, lineWidth: 2)
+                            }
+                        }
+                    )
+            }
+
+            if hasEvent && !isSelected {
+                Circle()
+                    .fill(UIConstants.orange)
+                    .frame(width: 5, height: 5)
+            } else {
+                Color.clear.frame(width: 5, height: 5)
+            }
+        }
+        .frame(height: 44)
+    }
+
+    // MARK: - Event Row
+    private func eventRow(event: CalendarEvent) -> some View {
+        NavigationLink {
+            FileDetailView(fileId: event.id, fileName: event.title)
+        } label: {
+            HStack(alignment: .top, spacing: 12) {
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(UIConstants.blue)
+                    .frame(width: 4, height: 44)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack {
+                        Text(event.title)
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(UIConstants.label)
+                            .kerning(-0.32)
+                        Spacer()
+                        if !event.time.isEmpty {
+                            Text(formatEventTime(event.time))
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(UIConstants.blue)
+                        }
+                    }
+                    if !event.content.isEmpty {
+                        Text(event.content)
+                            .font(.system(size: 13))
+                            .foregroundColor(UIConstants.label3)
+                            .lineLimit(2)
+                    }
+                }
+            }
+            .padding(.vertical, 13)
+            .padding(.horizontal, 16)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-    }
-
-    private var eventList: some View {
-        Group {
-            if viewModel.loadingDay {
-                ProgressView()
-                    .padding(.top, 40)
-            } else if viewModel.dayEvents.isEmpty {
-                VStack(spacing: 8) {
-                    Text("\(month(from: selectedDate))月\(calendar.component(.day, from: selectedDate))日")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                    Text("当天无日程")
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.top, 40)
-            } else {
-                List {
-                    ForEach(viewModel.dayEvents) { event in
-                        NavigationLink(value: event.toNoteFile()) {
-                            EventRow(event: event, onDelete: {
-                                Task {
-                                    await viewModel.deleteEvent(id: event.id)
-                                    await viewModel.loadMonth(year: year(from: currentMonth), month: month(from: currentMonth))
-                                    await viewModel.loadDay(dateString(from: selectedDate))
-                                }
-                            })
-                        }
-                    }
-                }
-                .listStyle(.plain)
-            }
-        }
-    }
-
-    // MARK: - 工具
-
-    private func year(from date: Date) -> Int {
-        calendar.component(.year, from: date)
-    }
-    private func month(from date: Date) -> Int {
-        calendar.component(.month, from: date)
-    }
-    private func dateString(from date: Date) -> String {
-        let fmt = DateFormatter()
-        fmt.dateFormat = "yyyy-MM-dd"
-        return fmt.string(from: date)
-    }
-    private var monthFormatter: DateFormatter {
-        let fmt = DateFormatter()
-        fmt.dateFormat = "yyyy年M月"
-        return fmt
-    }
-}
-
-/// 日历视图模型
-@MainActor
-final class CalendarEventViewModel: ObservableObject {
-    @Published var dayEvents: [CalendarEvent] = []
-    @Published var eventDates: Set<String> = []
-    @Published var loadingDay = false
-
-    private let api = APIClient.shared
-
-    func loadMonth(year: Int, month: Int) async {
-        do {
-            let items = try await api.getMonthSummary(year: year, month: month)
-            eventDates = Set(items.map { $0.date })
-        } catch {
-            // 静默失败
-        }
-    }
-
-    func loadDay(_ date: String) async {
-        loadingDay = true
-        do {
-            dayEvents = try await api.getEventsByDate(date)
-        } catch {
-            dayEvents = []
-        }
-        loadingDay = false
-    }
-
-    func deleteEvent(id: String) async {
-        do {
-            try await api.deleteEvent(id: id)
-        } catch {
-            // 静默失败
-        }
-    }
-}
-
-/// 日程行（带滑动手势删除 + 确认弹框）
-private struct EventRow: View {
-    let event: CalendarEvent
-    let onDelete: () -> Void
-    @State private var showDeleteConfirm = false
-
-    var body: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(event.title)
-                    .font(.body)
-                if !event.content.isEmpty {
-                    Text(event.content)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                }
-            }
-            Spacer()
-            if !event.time.isEmpty {
-                Text(event.time)
-                    .font(.caption)
-                    .foregroundStyle(.tint)
-            }
-        }
-        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+        .background(UIConstants.card)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .swipeActions(edge: .trailing) {
             Button(role: .destructive) {
-                showDeleteConfirm = true
+                deleteEventId = event.id
+                deleteEventTitle = event.title
+                showDeleteAlert = true
             } label: {
                 Label("删除", systemImage: "trash")
             }
         }
-        .confirmationDialog(
-            "确定删除日程？",
-            isPresented: $showDeleteConfirm,
-            titleVisibility: .visible
-        ) {
-            Button("删除", role: .destructive) { onDelete() }
-            Button("取消", role: .cancel) {}
-        } message: {
-            Text("将删除日程「\(event.title)」。")
+    }
+
+    // MARK: - Data Loading
+    private func loadMonth() async {
+        let cal = Calendar.current
+        let year = cal.component(.year, from: currentMonth)
+        let month = cal.component(.month, from: currentMonth)
+        await viewModel.loadMonth(year: year, month: month)
+    }
+
+    private func loadDay(_ day: Int) async {
+        let cal = Calendar.current
+        let year = cal.component(.year, from: currentMonth)
+        let month = cal.component(.month, from: currentMonth)
+        await viewModel.loadDay(year: year, month: month, day: day)
+    }
+
+    // MARK: - Helpers
+    private func monthYearString(from date: Date) -> String {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy年M月"
+        return f.string(from: date)
+    }
+
+    private func generateDays(for date: Date) -> [Int?] {
+        let cal = Calendar.current
+        guard let firstDay = cal.startOfMonth(for: date) else { return [] }
+
+        let range = cal.range(of: .day, in: .month, for: date) ?? (1..<31)
+        let weekday = cal.component(.weekday, from: firstDay) // 1=Sun, 2=Mon...
+        var offset = weekday - 2 // 转为周一起始
+        if offset < 0 { offset += 7 }
+
+        var result: [Int?] = Array(repeating: nil, count: offset)
+        result += range.map { $0 as Int? }
+
+        while result.count % 7 != 0 {
+            result.append(nil)
         }
+
+        return result
+    }
+
+    private func formatEventTime(_ time: String) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let date = formatter.date(from: time)
+            ?? ISO8601DateFormatter().date(from: time)
+            ?? Date()
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm"
+        return f.string(from: date)
+    }
+}
+
+// MARK: - Calendar Start of Month Extension
+extension Calendar {
+    func startOfMonth(for date: Date) -> Date? {
+        let components = dateComponents([.year, .month], from: date)
+        return self.date(from: components)
+    }
+}
+
+// MARK: - Calendar Event ViewModel
+@MainActor
+class CalendarEventViewModel: ObservableObject {
+    @Published var eventDays: Set<Int> = []
+    @Published var dayEvents: [CalendarEvent] = []
+
+    func loadMonth(year: Int, month: Int) async {
+        do {
+            let summary: [MonthSummaryItem] = try await APIClient.shared.getMonthSummary(year: year, month: month)
+            eventDays = Set(summary.compactMap {
+                Calendar.current.dateComponents([.day], from: isoToDate($0.date)).day
+            })
+        } catch {
+            print("loadMonth error:", error)
+        }
+    }
+
+    func loadDay(year: Int, month: Int, day: Int) async {
+        do {
+            let dateStr = String(format: "%04d-%02d-%02d", year, month, day)
+            let events: [CalendarEvent] = try await APIClient.shared.getEventsByDate(dateStr)
+            dayEvents = events
+        } catch {
+            print("loadDay error:", error)
+            dayEvents = []
+        }
+    }
+
+    func deleteEvent(eventId: String) async {
+        do {
+            try await APIClient.shared.deleteEvent(id: eventId)
+            dayEvents.removeAll(where: { $0.id == eventId })
+        } catch {
+            print("deleteEvent error:", error)
+        }
+    }
+
+    private func isoToDate(_ str: String) -> Date {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withFullDate]
+        return f.date(from: str) ?? Date()
     }
 }

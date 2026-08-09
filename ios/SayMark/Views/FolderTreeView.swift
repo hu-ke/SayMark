@@ -3,80 +3,625 @@ import SwiftUI
 struct FolderTreeView: View {
     @ObservedObject var viewModel: FolderTreeViewModel
     @Binding var locateFolderId: String?
-    @State private var expanded: Set<String> = []
+
+    var onNote: () -> Void
+    var onChat: () -> Void
+    var onRecord: () -> Void
+
+    @State private var expandedFolders: Set<String> = []
+    @State private var swipedRow: String? = nil
+    @State private var showDeleteAlert = false
+    @State private var deleteTargetId: String?
+    @State private var deleteTargetName: String?
+    @State private var deleteIsFolder = false
+    @State private var pushNewItem = false
 
     var body: some View {
-        ZStack {
-            if viewModel.loading && viewModel.tree.isEmpty {
-                ProgressView("加载中...")
-            } else if let error = viewModel.error, viewModel.tree.isEmpty {
-                ContentUnavailableView {
-                    Label("加载失败", systemImage: "exclamationmark.triangle")
-                } description: {
-                    Text(error)
-                } actions: {
-                    Button("重试") {
-                        Task { await viewModel.loadTree() }
-                    }
-                }
-            } else {
-                List {
-                    ForEach(viewModel.tree) { node in
-                        FolderRowView(node: node, viewModel: viewModel, expanded: $expanded)
-                    }
-                }
-                .listStyle(.insetGrouped)
-                .refreshable {
-                    await viewModel.loadTree()
-                }
-                .toolbar {
-                    ToolbarItem(placement: .navigationBarTrailing) {
-                        Button {
-                            Task { await viewModel.loadTree() }
-                        } label: {
-                            Image(systemName: "arrow.clockwise")
+        NavigationStack {
+            VStack(spacing: 0) {
+                // 自定义导航栏
+                HStack(spacing: 0) {
+                    Spacer()
+                    HStack(spacing: 12) {
+                        Button(action: onChat) {
+                            TabIcon(type: "chat", size: 18, color: UIConstants.blue, strokeWidth: 2)
+                                .frame(width: 32, height: 32)
+                                .background(UIConstants.blue.opacity(0.1))
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
                         }
-                        .disabled(viewModel.loading)
+
+                        Button {
+                            pushNewItem = true
+                        } label: {
+                            Image(systemName: "plus")
+                                .font(.system(size: 18, weight: .medium))
+                                .foregroundColor(.white)
+                                .frame(width: 32, height: 32)
+                                .background(UIConstants.blue)
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
+                .frame(height: 44)
+                .background(
+                    UIConstants.background.opacity(0.82)
+                        .background(Material.ultraThin)
+                )
+                .overlay(alignment: .bottom) {
+                    HDSeparator()
+                }
+
+                // 内容区
+                if viewModel.loading && viewModel.tree.isEmpty {
+                    Spacer()
+                    ProgressView()
+                        .scaleEffect(1.2)
+                    Spacer()
+                } else if viewModel.tree.isEmpty {
+                    emptyState
+                } else {
+                    mainContent
+                }
+            }
+            .background(UIConstants.background)
+            .refreshable {
+                await viewModel.loadTree()
+            }
+            // 隐藏的 NavigationLink，用于 push 到新建页面
+            .background(
+                NavigationLink(
+                    destination: NewItemSheet(viewModel: viewModel, parentId: nil),
+                    isActive: $pushNewItem
+                ) { EmptyView() }
+            )
+        }
+        .confirmationDialog("确定删除", isPresented: $showDeleteAlert) {
+            Button("删除", role: .destructive) {
+                guard let id = deleteTargetId else { return }
+                Task {
+                    if deleteIsFolder {
+                        await viewModel.deleteFolder(id: id)
+                    } else {
+                        await viewModel.deleteFile(id: id)
                     }
                 }
             }
-        }
-        .navigationDestination(for: NoteFile.self) { file in
-            FileDetailView(note: file, viewModel: viewModel)
-        }
-        .alert("出错了", isPresented: Binding(
-            get: { viewModel.error != nil && !viewModel.tree.isEmpty },
-            set: { if !$0 { viewModel.error = nil } }
-        )) {
-            Button("好") { viewModel.error = nil }
+            Button("取消", role: .cancel) {}
         } message: {
-            Text(viewModel.error ?? "")
-        }
-        .onChange(of: locateFolderId) { _, newValue in
-            if let id = newValue {
-                expand(to: id)
+            if let name = deleteTargetName {
+                Text("将删除「\(name)」\(deleteIsFolder ? "及其内部文件" : "")。此操作不可撤销。")
             }
         }
     }
 
-    /// 展开到目标文件夹（展开其全部祖先）
-    private func expand(to folderId: String) {
-        guard let path = findPath(in: viewModel.tree, target: folderId) else { return }
-        for id in path {
-            expanded.insert(id)
+    // MARK: - Empty State
+    private var emptyState: some View {
+        VStack(spacing: 0) {
+            // 大标题
+            HStack {
+                Text("SayMark")
+                    .font(.system(size: 34, weight: .bold))
+                    .kerning(0.37)
+                    .foregroundColor(UIConstants.label)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 6)
+                    .padding(.bottom, 2)
+                Spacer()
+            }
+
+            Spacer()
+
+            VStack(spacing: 14) {
+                // 笔记本插图
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color.white)
+                        .frame(width: 84, height: 94)
+                        .shadow(color: .black.opacity(0.12), radius: 6, y: 4)
+                    // 书脊
+                    Rectangle()
+                        .fill(Color(red: 0.898, green: 0.898, blue: 0.918))
+                        .frame(width: 10, height: 94)
+                    // 文字模拟行
+                    VStack(spacing: 6) {
+                        RoundedRectangle(cornerRadius: 2.5)
+                            .fill(Color(red: 0.820, green: 0.820, blue: 0.839))
+                            .frame(width: 48, height: 5)
+                        RoundedRectangle(cornerRadius: 2.5)
+                            .fill(Color(red: 0.820, green: 0.820, blue: 0.839))
+                            .frame(width: 38, height: 5)
+                        RoundedRectangle(cornerRadius: 2.5)
+                            .fill(Color(red: 0.820, green: 0.820, blue: 0.839))
+                            .frame(width: 44, height: 5)
+                        RoundedRectangle(cornerRadius: 2.5)
+                            .fill(Color(red: 0.820, green: 0.820, blue: 0.839))
+                            .frame(width: 32, height: 5)
+                    }
+                    .padding(.leading, 40)
+
+                    // 麦克风徽章
+                    Circle()
+                        .fill(UIConstants.blue)
+                        .frame(width: 44, height: 44)
+                        .shadow(color: UIConstants.blue.opacity(0.45), radius: 8, y: 6)
+                        .overlay {
+                            Image(systemName: "mic.fill")
+                                .font(.system(size: 16))
+                                .foregroundColor(.white)
+                        }
+                        .offset(x: 38, y: 42)
+                }
+
+                VStack(spacing: 4) {
+                    Text("还没有笔记")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundColor(UIConstants.label)
+                        .kerning(-0.5)
+                    Text("按住话筒开始说话吧，AI 会自动整理成结构化笔记")
+                        .font(.system(size: 15))
+                        .foregroundColor(UIConstants.label3)
+                        .multilineTextAlignment(.center)
+                        .lineSpacing(4)
+                        .kerning(-0.24)
+                        .padding(.horizontal, 20)
+                }
+                .padding(.top, 8)
+
+                Button(action: onRecord) {
+                    Text("开始录音")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 28)
+                        .padding(.vertical, 12)
+                        .background(UIConstants.blue)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                        .shadow(color: UIConstants.blue.opacity(0.33), radius: 16, y: 4)
+                }
+                .padding(.top, 12)
+            }
+
+            Spacer()
         }
     }
 
-    /// 查找从根到目标文件夹的路径（返回目标所有祖先的 id）
-    private func findPath(in nodes: [TreeNode], target: String) -> [String]? {
-        for node in nodes {
-            if node.folder.id == target {
-                return []
-            }
-            if let sub = findPath(in: node.children, target: target) {
-                return [node.folder.id] + sub
+    // MARK: - Main Content
+    private var mainContent: some View {
+        ScrollView {
+            VStack(spacing: 0) {
+                // 大标题
+                HStack {
+                    Text("SayMark")
+                        .font(.system(size: 34, weight: .bold))
+                        .kerning(0.37)
+                        .foregroundColor(UIConstants.label)
+                        .padding(.horizontal, 20)
+                        .padding(.top, 4)
+                        .padding(.bottom, 2)
+                    Spacer()
+                }
+
+                // 卡片列表
+                VStack(spacing: 10) {
+                    ForEach(Array(viewModel.tree.enumerated()), id: \.element.id) { index, node in
+                        FolderCard(
+                            node: node,
+                            colorIndex: index,
+                            expandedFolders: $expandedFolders,
+                            swipedRow: $swipedRow,
+                            viewModel: viewModel,
+                            showDeleteAlert: $showDeleteAlert,
+                            deleteTargetId: $deleteTargetId,
+                            deleteTargetName: $deleteTargetName,
+                            deleteIsFolder: $deleteIsFolder
+                        )
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 4)
+
+                // 底部留白给 FAB + TabBar
+                Color.clear.frame(height: 100)
             }
         }
-        return nil
+    }
+}
+
+// MARK: - Folder Card
+struct FolderCard: View {
+    let node: TreeNode
+    let colorIndex: Int
+    @Binding var expandedFolders: Set<String>
+    @Binding var swipedRow: String?
+    @ObservedObject var viewModel: FolderTreeViewModel
+    @Binding var showDeleteAlert: Bool
+    @Binding var deleteTargetId: String?
+    @Binding var deleteTargetName: String?
+    @Binding var deleteIsFolder: Bool
+
+    @State private var showRenameSheet = false
+
+    var isExpanded: Bool { expandedFolders.contains(node.id) }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // 文件夹标题行
+            folderHeaderRow
+                .background(UIConstants.card)
+
+            // Swipe 操作
+            if swipedRow == node.id {
+                swipeActions(for: node.id, name: node.name, isFolder: true)
+            }
+
+            // 展开的子内容
+            if isExpanded {
+                Divider()
+                ForEach(node.files) { file in
+                    FileRowCard(
+                        file: file,
+                        isSwiped: swipedRow == file.id,
+                        viewModel: viewModel,
+                        swipedRow: $swipedRow,
+                        showDeleteAlert: $showDeleteAlert,
+                        deleteTargetId: $deleteTargetId,
+                        deleteTargetName: $deleteTargetName
+                    )
+                    .padding(.leading, 20)
+                }
+                ForEach(Array(node.children.enumerated()), id: \.element.id) { childIndex, child in
+                    SubFolderRow(
+                        node: child,
+                        colorIndex: childIndex,
+                        expandedFolders: $expandedFolders,
+                        swipedRow: $swipedRow,
+                        viewModel: viewModel,
+                        showDeleteAlert: $showDeleteAlert,
+                        deleteTargetId: $deleteTargetId,
+                        deleteTargetName: $deleteTargetName,
+                        deleteIsFolder: $deleteIsFolder
+                    )
+                }
+            }
+        }
+        .cardStyle()
+        .sheet(isPresented: $showRenameSheet) {
+            RenameSheet(
+                title: "重命名文件夹",
+                currentName: node.name
+            ) { newName in
+                Task { await viewModel.renameFolder(id: node.id, name: newName) }
+            }
+        }
+    }
+
+    private var folderHeaderRow: some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                if isExpanded {
+                    expandedFolders.remove(node.id)
+                } else {
+                    expandedFolders.insert(node.id)
+                }
+                swipedRow = nil
+            }
+        } label: {
+            HStack(spacing: 12) {
+                RowIcon(
+                    iconType: "folder",
+                    color: UIConstants.folderColors[colorIndex % UIConstants.folderColors.count]
+                )
+                Text(node.name)
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundColor(UIConstants.label)
+                    .kerning(-0.41)
+                Spacer()
+                if !isExpanded {
+                    let count = node.files.count + node.children.reduce(0) { $0 + $1.files.count + $1.children.reduce(0) { $0 + $1.files.count } }
+                    Text("\(count)项")
+                        .font(.system(size: 13))
+                        .foregroundColor(UIConstants.label3)
+                }
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(UIConstants.label3)
+                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                    .animation(.easeInOut(duration: 0.2), value: isExpanded)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 11)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .simultaneousGesture(
+            TapGesture(count: 2)
+                .onEnded {
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        swipedRow = swipedRow == node.id ? nil : node.id
+                    }
+                }
+        )
+    }
+
+    private func swipeActions(for id: String, name: String, isFolder: Bool) -> some View {
+        HStack(spacing: 0) {
+            Spacer()
+            Button {
+                swipedRow = nil
+                showRenameSheet = true
+            } label: {
+                VStack(spacing: 3) {
+                    Image(systemName: "pencil")
+                        .font(.system(size: 14))
+                    Text("重命名")
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                .foregroundColor(.white)
+                .frame(width: 72, height: 44)
+                .background(UIConstants.blue)
+            }
+
+            Button {
+                deleteTargetId = id
+                deleteTargetName = name
+                deleteIsFolder = isFolder
+                showDeleteAlert = true
+                swipedRow = nil
+            } label: {
+                VStack(spacing: 3) {
+                    Image(systemName: "trash")
+                        .font(.system(size: 14))
+                    Text("删除")
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                .foregroundColor(.white)
+                .frame(width: 72, height: 44)
+                .background(UIConstants.red)
+            }
+        }
+        .transition(.move(edge: .trailing).combined(with: .opacity))
+    }
+}
+
+// MARK: - Sub Folder Row
+struct SubFolderRow: View {
+    let node: TreeNode
+    let colorIndex: Int
+    @Binding var expandedFolders: Set<String>
+    @Binding var swipedRow: String?
+    @ObservedObject var viewModel: FolderTreeViewModel
+    @Binding var showDeleteAlert: Bool
+    @Binding var deleteTargetId: String?
+    @Binding var deleteTargetName: String?
+    @Binding var deleteIsFolder: Bool
+
+    @State private var showRenameSheet = false
+    var isExpanded: Bool { expandedFolders.contains(node.id) }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Divider()
+
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    if isExpanded {
+                        expandedFolders.remove(node.id)
+                    } else {
+                        expandedFolders.insert(node.id)
+                    }
+                    swipedRow = nil
+                }
+            } label: {
+                HStack(spacing: 12) {
+                    RowIcon(iconType: "folder", color: UIConstants.folderColors[colorIndex % UIConstants.folderColors.count])
+                    Text(node.name)
+                        .font(.system(size: 17, weight: .medium))
+                        .foregroundColor(UIConstants.label)
+                        .kerning(-0.41)
+                    Spacer()
+                    if !isExpanded {
+                        Text("\(node.files.count)项")
+                            .font(.system(size: 13))
+                            .foregroundColor(UIConstants.label3)
+                    }
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(UIConstants.label3)
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                        .animation(.easeInOut(duration: 0.2), value: isExpanded)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 11)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .padding(.leading, 36)
+
+            if swipedRow == node.id {
+                HStack(spacing: 0) {
+                    Spacer()
+                    Button {
+                        swipedRow = nil
+                        showRenameSheet = true
+                    } label: {
+                        VStack(spacing: 3) {
+                            Image(systemName: "pencil").font(.system(size: 14))
+                            Text("重命名").font(.system(size: 12, weight: .semibold))
+                        }
+                        .foregroundColor(.white)
+                        .frame(width: 72, height: 44)
+                        .background(UIConstants.blue)
+                    }
+                    Button {
+                        deleteTargetId = node.id
+                        deleteTargetName = node.name
+                        deleteIsFolder = true
+                        showDeleteAlert = true
+                        swipedRow = nil
+                    } label: {
+                        VStack(spacing: 3) {
+                            Image(systemName: "trash").font(.system(size: 14))
+                            Text("删除").font(.system(size: 12, weight: .semibold))
+                        }
+                        .foregroundColor(.white)
+                        .frame(width: 72, height: 44)
+                        .background(UIConstants.red)
+                    }
+                }
+            }
+
+            if isExpanded {
+                Divider()
+                ForEach(node.files) { file in
+                    FileRowCard(
+                        file: file,
+                        isSwiped: swipedRow == file.id,
+                        viewModel: viewModel,
+                        swipedRow: $swipedRow,
+                        showDeleteAlert: $showDeleteAlert,
+                        deleteTargetId: $deleteTargetId,
+                        deleteTargetName: $deleteTargetName
+                    )
+                    .padding(.leading, 20)
+                }
+            }
+        }
+        .background(UIConstants.card)
+        .sheet(isPresented: $showRenameSheet) {
+            RenameSheet(title: "重命名文件夹", currentName: node.name) { newName in
+                Task { await viewModel.renameFolder(id: node.id, name: newName) }
+            }
+        }
+    }
+}
+
+// MARK: - File Row Card
+struct FileRowCard: View {
+    let file: NoteFile
+    let isSwiped: Bool
+    @ObservedObject var viewModel: FolderTreeViewModel
+    @Binding var swipedRow: String?
+    @Binding var showDeleteAlert: Bool
+    @Binding var deleteTargetId: String?
+    @Binding var deleteTargetName: String?
+
+    @State private var showRenameSheet = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Divider()
+
+            NavigationLink {
+                FileDetailView(fileId: file.id, fileName: file.name)
+            } label: {
+                HStack(spacing: 12) {
+                    RowIcon(
+                        iconType: file.isEvent ? "cal" : "doc",
+                        color: file.isEvent ? UIConstants.orange : UIConstants.label3
+                    )
+                    VStack(alignment: .leading, spacing: 1) {
+                        HStack(spacing: 6) {
+                            Text(file.name)
+                                .font(.system(size: 17))
+                                .foregroundColor(UIConstants.label)
+                                .kerning(-0.41)
+                                .lineLimit(1)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            if file.isEvent {
+                                CapsuleBadge(text: "日程")
+                            }
+                        }
+                        Text(formatTime(file.createdAt))
+                            .font(.system(size: 13))
+                            .foregroundColor(UIConstants.label3)
+                            .kerning(-0.08)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 14))
+                        .foregroundColor(UIConstants.label3)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 11)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .simultaneousGesture(
+                TapGesture(count: 2)
+                    .onEnded {
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            swipedRow = swipedRow == file.id ? nil : file.id
+                        }
+                    }
+            )
+
+            if isSwiped {
+                HStack(spacing: 0) {
+                    Spacer()
+                    Button {
+                        swipedRow = nil
+                        showRenameSheet = true
+                    } label: {
+                        VStack(spacing: 3) {
+                            Image(systemName: "pencil").font(.system(size: 13))
+                            Text("重命名").font(.system(size: 12, weight: .semibold))
+                        }
+                        .foregroundColor(.white)
+                        .frame(width: 72, height: 44)
+                        .background(UIConstants.blue)
+                    }
+                    Button {
+                        deleteTargetId = file.id
+                        deleteTargetName = file.name
+                        showDeleteAlert = true
+                        swipedRow = nil
+                    } label: {
+                        VStack(spacing: 3) {
+                            Image(systemName: "trash").font(.system(size: 13))
+                            Text("删除").font(.system(size: 12, weight: .semibold))
+                        }
+                        .foregroundColor(.white)
+                        .frame(width: 72, height: 44)
+                        .background(UIConstants.red)
+                    }
+                }
+                .transition(.move(edge: .trailing).combined(with: .opacity))
+            }
+        }
+        .background(UIConstants.card)
+        .sheet(isPresented: $showRenameSheet) {
+            RenameSheet(title: "重命名文件", currentName: file.name) { newName in
+                Task { await viewModel.renameFile(id: file.id, name: newName) }
+            }
+        }
+    }
+
+    private func formatTime(_ time: String) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        guard let date = formatter.date(from: time) else {
+            formatter.formatOptions = [.withInternetDateTime]
+            guard let date = formatter.date(from: time) else { return "" }
+            return formatDisplay(date: date)
+        }
+        return formatDisplay(date: date)
+    }
+
+    private func formatDisplay(date: Date) -> String {
+        let now = Date()
+        let cal = Calendar.current
+        if cal.isDateInToday(date) {
+            let f = DateFormatter()
+            f.dateFormat = "HH:mm"
+            return "今天 \(f.string(from: date))"
+        } else if cal.isDateInYesterday(date) {
+            let f = DateFormatter()
+            f.dateFormat = "HH:mm"
+            return "昨天 \(f.string(from: date))"
+        } else {
+            let f = DateFormatter()
+            f.dateFormat = "MM月dd日"
+            return f.string(from: date)
+        }
     }
 }

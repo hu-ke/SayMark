@@ -1,149 +1,214 @@
 import SwiftUI
 
-/// 提醒列表：显示所有设置了提醒的日程
 struct RemindersView: View {
     @StateObject private var viewModel = RemindersViewModel()
+    @State private var showDeleteAlert = false
+    @State private var deleteReminderId: String?
 
     var body: some View {
         NavigationStack {
-            Group {
-                if viewModel.loading {
-                    ProgressView("加载中...")
-                } else if viewModel.reminders.isEmpty {
-                    ContentUnavailableView {
-                        Label("暂无提醒", systemImage: "bell.slash")
-                    } description: {
-                        Text("还没有设置任何日程提醒")
-                    }
-                } else {
-                    List {
-                        ForEach(viewModel.reminders) { event in
-                            ReminderRow(event: event, onCancel: {
-                                Task { await viewModel.cancelReminder(id: event.id) }
-                            })
-                        }
-                    }
-                    .listStyle(.insetGrouped)
-                }
-            }
-            .navigationTitle("提醒")
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
+            VStack(spacing: 0) {
+                // 导航栏
+                HStack {
+                    Spacer()
+                    Text("提醒")
+                        .font(.system(size: 17, weight: .semibold))
+                        .kerning(-0.41)
+                    Spacer()
                     if !viewModel.reminders.isEmpty {
                         Button {
                             Task { await viewModel.load() }
                         } label: {
                             Image(systemName: "arrow.clockwise")
+                                .font(.system(size: 20))
+                                .foregroundColor(UIConstants.blue)
                         }
-                        .disabled(viewModel.loading)
+                        .padding(.trailing, 4)
                     }
                 }
+                .padding(.horizontal, 16)
+                .frame(height: 44)
+                .background(
+                    UIConstants.background.opacity(0.82)
+                        .background(Material.ultraThin)
+                )
+                .overlay(alignment: .bottom) {
+                    HDSeparator()
+                }
+
+                if viewModel.loading {
+                    Spacer()
+                    ProgressView()
+                        .scaleEffect(1.2)
+                    Spacer()
+                } else if viewModel.reminders.isEmpty {
+                    emptyState
+                } else {
+                    remindersList
+                }
             }
-            .refreshable { await viewModel.load() }
-            .task { await viewModel.load() }
+            .background(UIConstants.background)
+        }
+        .task {
+            await viewModel.load()
+        }
+        .refreshable {
+            await viewModel.load()
         }
     }
-}
 
-/// 提醒行
-private struct ReminderRow: View {
-    let event: CalendarEvent
-    let onCancel: () -> Void
-    @State private var showCancelConfirm = false
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "bell.fill")
-                .foregroundStyle(.orange)
-                .font(.title3)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(event.title)
-                    .font(.body)
-                    .fontWeight(.medium)
-
-                HStack(spacing: 8) {
-                    // 日期时间
-                    HStack(spacing: 2) {
-                        Image(systemName: "calendar")
-                            .font(.caption2)
-                        Text(event.date)
-                            .font(.caption)
-                        if !event.time.isEmpty {
-                            Text(event.time)
-                                .font(.caption)
-                        }
-                    }
-                    .foregroundStyle(.secondary)
-
-                    // 提前多少分钟
-                    if let mins = event.reminderMinutes {
-                        Text("提前\(mins)分钟")
-                            .font(.caption)
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Color.orange.opacity(0.8))
-                            .clipShape(Capsule())
-                    }
-                }
-            }
-
+    // MARK: - Empty State
+    private var emptyState: some View {
+        VStack(spacing: 14) {
             Spacer()
 
-            Button {
-                showCancelConfirm = true
-            } label: {
-                Image(systemName: "bell.slash")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            // 铃铛插图
+            ZStack {
+                Circle()
+                    .fill(UIConstants.label3.opacity(0.1))
+                    .frame(width: 80, height: 80)
+
+                Image(systemName: "bell.slash.fill")
+                    .font(.system(size: 36))
+                    .foregroundColor(UIConstants.label3)
             }
-            .buttonStyle(.plain)
+
+            VStack(spacing: 6) {
+                Text("暂无提醒")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundColor(UIConstants.label)
+                    .kerning(-0.5)
+                Text("还没有设置任何日程提醒")
+                    .font(.system(size: 15))
+                    .foregroundColor(UIConstants.label3)
+                    .kerning(-0.24)
+            }
+            .padding(.top, 4)
+
+            Spacer()
         }
-        .padding(.vertical, 4)
-        .confirmationDialog(
-            "取消提醒？",
-            isPresented: $showCancelConfirm,
-            titleVisibility: .visible
-        ) {
-            Button("取消提醒", role: .destructive) { onCancel() }
-            Button("保留", role: .cancel) {}
+    }
+
+    // MARK: - Reminders List
+    private var remindersList: some View {
+        ScrollView {
+            VStack(spacing: 10) {
+                ForEach(viewModel.reminders) { reminder in
+                    VStack(spacing: 0) {
+                        HStack(alignment: .top, spacing: 12) {
+                            TabIcon(type: "bell", size: 22, color: UIConstants.orange, strokeWidth: 2)
+                                .padding(.top, 1)
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(reminder.name)
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundColor(UIConstants.label)
+                                    .kerning(-0.32)
+
+                                HStack(spacing: 4) {
+                                    TabIcon(type: "cal", size: 11, color: UIConstants.label3, strokeWidth: 1.6)
+                                    Text(formatReminderTime(reminder))
+                                        .font(.system(size: 12))
+                                        .foregroundColor(UIConstants.label3)
+                                }
+
+                                if reminder.hasReminder, let minutes = reminder.reminderMinutes {
+                                    Text("提前\(formatMinutes(minutes))")
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundColor(UIConstants.orange)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 3)
+                                        .background(UIConstants.orange.opacity(0.12))
+                                        .clipShape(Capsule())
+                                        .padding(.top, 2)
+                                }
+                            }
+
+                            Spacer()
+
+                            Button {
+                                deleteReminderId = reminder.id
+                                showDeleteAlert = true
+                            } label: {
+                                TabIcon(type: "bell-off", size: 18, color: UIConstants.label3, strokeWidth: 1.8)
+                                    .padding(4)
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 13)
+                    }
+                    .background(UIConstants.card)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 16)
+
+            Color.clear.frame(height: 20)
+        }
+        .confirmationDialog("确定删除", isPresented: $showDeleteAlert) {
+            Button("删除", role: .destructive) {
+                if let id = deleteReminderId {
+                    Task { await viewModel.deleteReminder(id: id) }
+                }
+            }
+            Button("取消", role: .cancel) {}
         } message: {
-            Text("将取消「\(event.title)」的提醒。")
+            Text("将删除此提醒。")
+        }
+    }
+
+    // MARK: - Helpers
+    private func formatReminderTime(_ reminder: NoteFile) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let date = formatter.date(from: reminder.time)
+            ?? ISO8601DateFormatter().date(from: reminder.time)
+            ?? Date()
+
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd HH:mm"
+        return f.string(from: date)
+    }
+
+    private func formatMinutes(_ minutes: Int) -> String {
+        if minutes < 60 {
+            return "\(minutes)分钟"
+        } else if minutes == 60 {
+            return "1小时"
+        } else {
+            return "\(minutes / 60)小时"
         }
     }
 }
 
-/// 提醒视图模型
+// MARK: - Reminders ViewModel
 @MainActor
-final class RemindersViewModel: ObservableObject {
-    @Published var reminders: [CalendarEvent] = []
+class RemindersViewModel: ObservableObject {
+    @Published var reminders: [NoteFile] = []
     @Published var loading = false
-
-    private let api = APIClient.shared
+    @Published var error: String?
 
     func load() async {
         loading = true
+        defer { loading = false }
         do {
-            reminders = try await api.getReminders()
-            // 同步到本地通知
-            if let notes = try? await api.getReminderNotes() {
-                await NotificationManager.shared.scheduleNotifications(from: notes)
-            }
+            let notes = try await APIClient.shared.getReminderNotes()
+            reminders = notes
         } catch {
-            reminders = []
+            self.error = error.localizedDescription
         }
-        loading = false
     }
 
-    func cancelReminder(id: String) async {
+    func deleteReminder(id: String) async {
         do {
-            try await api.cancelReminder(id: id)
-            reminders.removeAll { $0.id == id }
-            // 重新同步本地通知
-            if let notes = try? await api.getReminderNotes() {
-                await NotificationManager.shared.scheduleNotifications(from: notes)
-            }
-        } catch {}
+            _ = try await APIClient.shared.requestEmpty(
+                path: "/api/files/\(id)",
+                method: "DELETE"
+            )
+            reminders.removeAll(where: { $0.id == id })
+        } catch {
+            print("deleteReminder error:", error)
+        }
     }
 }

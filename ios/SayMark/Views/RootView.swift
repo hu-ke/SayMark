@@ -1,53 +1,71 @@
 import SwiftUI
 
+// MARK: - Recording Zone
+enum RecZone {
+    case normal
+    case cancel
+    case text
+}
+
 struct RootView: View {
     @StateObject private var viewModel = FolderTreeViewModel()
-    @State private var showNewItem = false
     @State private var locateFolderId: String?
     @State private var selectedTab = 0
 
     // 聊天抽屉
     @State private var showChat = false
 
+    // 录音浮层
+    @State private var recordingZone: RecZone? = nil
+    @State private var showVoiceSheet = false
+
     var body: some View {
         ZStack {
-            // 主 TabView
-            TabView(selection: $selectedTab) {
-                NavigationStack {
-                    FolderTreeView(viewModel: viewModel, locateFolderId: $locateFolderId)
-                        .navigationTitle("语音记事本")
-                        .toolbar {
-                            ToolbarItemGroup(placement: .navigationBarTrailing) {
-                                Button {
-                                    showNewItem = true
-                                } label: {
-                                    Image(systemName: "plus")
-                                }
-                            }
-                        }
-                        .sheet(isPresented: $showNewItem) {
-                            NewItemSheet(viewModel: viewModel, parentId: nil)
-                        }
-                }
-                .tabItem {
-                    Label("文件", systemImage: "folder")
-                }
-                .tag(0)
-
-                CalendarView(treeViewModel: viewModel)
-                    .tabItem {
-                        Label("日历", systemImage: "calendar")
+            // 主内容区
+            VStack(spacing: 0) {
+                // 页面切换
+                ZStack {
+                    switch selectedTab {
+                    case 0:
+                        FolderTreeView(
+                            viewModel: viewModel,
+                            locateFolderId: $locateFolderId,
+                            onNote: { /* file detail handled via NavigationLink */ },
+                            onChat: { showChat = true },
+                            onRecord: { recordingZone = .normal }
+                        )
+                    case 1:
+                        CalendarView(treeViewModel: viewModel)
+                    case 2:
+                        RemindersView()
+                    default:
+                        EmptyView()
                     }
-                    .tag(1)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                RemindersView()
-                    .tabItem {
-                        Label("提醒", systemImage: "bell")
-                    }
-                    .tag(2)
+                // 自定义 TabBar
+                if selectedTab <= 2 && !viewModel.hideFloatingButton {
+                    SayMarkTabBar(selectedTab: $selectedTab)
+                }
             }
 
-            // 半透明遮罩
+            // FAB 录音按钮
+            if selectedTab == 0 && !viewModel.hideFloatingButton {
+                VStack {
+                    Spacer()
+                    HStack {
+                        Spacer()
+                        FABButton {
+                            recordingZone = .normal
+                        }
+                        .padding(.trailing, 20)
+                        .padding(.bottom, 98)
+                    }
+                }
+            }
+
+            // 半透明遮罩（聊天抽屉）
             if showChat {
                 Color.black.opacity(0.3)
                     .ignoresSafeArea()
@@ -55,7 +73,7 @@ struct RootView: View {
                     .transition(.opacity)
             }
 
-            // 聊天抽屉（全屏，从右侧滑入）
+            // 聊天抽屉（从右侧滑入）
             GeometryReader { geometry in
                 HStack(spacing: 0) {
                     Spacer()
@@ -76,23 +94,14 @@ struct RootView: View {
             .ignoresSafeArea()
             .animation(.spring(response: 0.35, dampingFraction: 0.85), value: showChat)
 
-            // 底部中间聊天按钮（进入详情页时隐藏）
-            if !viewModel.hideFloatingButton {
-                VStack {
-                    Spacer()
-                    Button {
-                        showChat = true
-                    } label: {
-                        Image(systemName: "bubble.left.and.bubble.right.fill")
-                            .font(.title3)
-                            .foregroundStyle(.white)
-                            .padding(14)
-                            .background(Circle().fill(Color.accentColor).shadow(radius: 4))
-                    }
-                    .padding(.bottom, 74)  // TabBar 上方
-                }
+            // 录音覆盖层
+            if let zone = recordingZone {
+                RecordingOverlay(zone: zone, onClose: { recordingZone = nil })
+                    .transition(.opacity)
+                    .zIndex(100)
             }
         }
+        .background(UIConstants.background)
         .task {
             await viewModel.loadTree()
             LocationManager.shared.requestLocation()
@@ -123,5 +132,188 @@ struct RootView: View {
         withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
             showChat = false
         }
+    }
+}
+
+// MARK: - Recording Overlay
+struct RecordingOverlay: View {
+    let zone: RecZone
+    let onClose: () -> Void
+
+    @State private var transcript = "明天下午三点产品路线图评审..."
+    @State private var dragOffset: CGFloat = 0
+    @State private var currentZone: RecZone = .normal
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.55)
+                .ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                Spacer()
+
+                switch currentZone {
+                case .normal:
+                    // 波形动画
+                    HStack(spacing: 7) {
+                        ForEach(0..<6, id: \.self) { i in
+                            WaveBar(index: i)
+                        }
+                    }
+                    .padding(.bottom, 32)
+
+                    Text("松开 发送")
+                        .font(.system(size: 26, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(.bottom, 14)
+
+                    Text(transcript)
+                        .font(.system(size: 15))
+                        .foregroundColor(.white.opacity(0.75))
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: 280)
+                        .lineLimit(3)
+                        .padding(.bottom, 60)
+
+                case .cancel:
+                    VStack(spacing: 18) {
+                        ZStack {
+                            Circle()
+                                .fill(UIConstants.red.opacity(0.2))
+                                .frame(width: 88 + 28, height: 88 + 28)
+                            Circle()
+                                .fill(UIConstants.red)
+                                .frame(width: 88, height: 88)
+                            Image(systemName: "xmark")
+                                .font(.system(size: 44, weight: .medium))
+                                .foregroundColor(.white)
+                        }
+                        Text("松开 取消")
+                            .font(.system(size: 28, weight: .bold))
+                            .foregroundColor(UIConstants.red)
+                    }
+                    .padding(48)
+                    .background(UIConstants.red.opacity(0.18))
+                    .clipShape(RoundedRectangle(cornerRadius: 28))
+
+                case .text:
+                    VStack(spacing: 18) {
+                        ZStack {
+                            Circle()
+                                .fill(UIConstants.green.opacity(0.2))
+                                .frame(width: 88 + 28, height: 88 + 28)
+                            Circle()
+                                .fill(UIConstants.green)
+                                .frame(width: 88, height: 88)
+                            Image(systemName: "text.alignleft")
+                                .font(.system(size: 44, weight: .medium))
+                                .foregroundColor(.white)
+                        }
+                        Text("松开 转文字")
+                            .font(.system(size: 28, weight: .bold))
+                            .foregroundColor(UIConstants.green)
+                    }
+                    .padding(48)
+                    .background(UIConstants.green.opacity(0.18))
+                    .clipShape(RoundedRectangle(cornerRadius: 28))
+                }
+
+                Spacer()
+
+                // 底部提示
+                if currentZone == .normal {
+                    HStack {
+                        HStack(spacing: 5) {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 12))
+                                .foregroundColor(.white.opacity(0.6))
+                            Text("松开取消")
+                                .font(.system(size: 11.5))
+                                .foregroundColor(.white.opacity(0.6))
+                        }
+                        Spacer()
+                        HStack(spacing: 5) {
+                            Text("转文字")
+                                .font(.system(size: 11.5))
+                                .foregroundColor(.white.opacity(0.6))
+                            Image(systemName: "text.alignleft")
+                                .font(.system(size: 12))
+                                .foregroundColor(.white.opacity(0.6))
+                        }
+                    }
+                    .padding(.horizontal, 40)
+                    .padding(.bottom, 20)
+                }
+
+                // 底部麦克风按钮
+                ZStack {
+                    Circle()
+                        .fill(currentZone == .cancel ? UIConstants.red :
+                               currentZone == .text ? UIConstants.green : UIConstants.blue)
+                        .frame(width: 72, height: 72)
+                        .shadow(color: (currentZone == .cancel ? UIConstants.red :
+                                         currentZone == .text ? UIConstants.green : UIConstants.blue).opacity(0.25),
+                                radius: 10)
+                    Image(systemName: "mic.fill")
+                        .font(.system(size: 32))
+                        .foregroundColor(.white)
+                }
+                .padding(.bottom, 50)
+            }
+        }
+        .onTapGesture { onClose() }
+        .gesture(
+            DragGesture(minimumDistance: 5)
+                .onChanged { value in
+                    dragOffset = value.translation.width
+                    if dragOffset < -60 {
+                        currentZone = .text
+                    } else if dragOffset > 60 {
+                        currentZone = .cancel
+                    } else {
+                        currentZone = .normal
+                    }
+                }
+                .onEnded { value in
+                    let finalOffset = value.translation.width
+                    if finalOffset < -80 {
+                        // 转文字
+                        onClose()
+                    } else if finalOffset > 80 {
+                        // 取消
+                        onClose()
+                    } else {
+                        // 发送
+                        onClose()
+                    }
+                    currentZone = .normal
+                    dragOffset = 0
+                }
+        )
+    }
+}
+
+// MARK: - Wave Bar Animation
+struct WaveBar: View {
+    let index: Int
+    let animations: [(String, Double)] = [
+        ("w1", 0.68), ("w2", 0.52), ("w3", 0.78),
+        ("w4", 0.61), ("w5", 0.74), ("w6", 0.56)
+    ]
+    let minHeights: [CGFloat] = [10, 22, 14, 26, 12, 20]
+    let maxHeights: [CGFloat] = [28, 10, 32, 10, 24, 8]
+
+    @State private var animate = false
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 3)
+            .fill(Color.white)
+            .frame(width: 4, height: animate ? maxHeights[index] : minHeights[index])
+            .animation(
+                .easeInOut(duration: animations[index].1)
+                .repeatForever(autoreverses: true),
+                value: animate
+            )
+            .onAppear { animate = true }
     }
 }

@@ -17,6 +17,7 @@
 		39F89E534DC36A62E2930D57 /* SpeechRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = D555133413D382A2720F3DC3 /* SpeechRecognizer.swift */; };
 		414DB19B05F096E7AF7FDB85 /* FolderTreeViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2F7AEFF0E1C1CF1FBEA0C57 /* FolderTreeViewModel.swift */; };
 		48CE263A8ADF77CE19E82BAC /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A8A17801F3EFFE675F603CE /* ChatView.swift */; };
+		4A29B2FDA476FE11A0B22B3B /* UIConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2460D4B55DA617B1BC4B8181 /* UIConstants.swift */; };
 		4E96350B519C268FA156AF77 /* ChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BD21175AA5F12E2044D391E /* ChatViewModel.swift */; };
 		52ECBD1481187AE241DCF3DC /* Speech.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7BEA7654F80B00F2E299528E /* Speech.framework */; };
 		5A6BCB2A0F0154D996E98403 /* CalendarEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AEAE6EC4816820E59CB107F /* CalendarEvent.swift */; };
@@ -42,6 +43,7 @@
 		0FCDBAACBD2E906F961A3316 /* NewItemSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewItemSheet.swift; sourceTree = "<group>"; };
 		10D8ABDA6AA421E724CAFA7A /* RemindersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemindersView.swift; sourceTree = "<group>"; };
 		164790EF45F22BF2EE0BDF4C /* DeviceID.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceID.swift; sourceTree = "<group>"; };
+		2460D4B55DA617B1BC4B8181 /* UIConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UIConstants.swift; sourceTree = "<group>"; };
 		26CB68B600C2C97B1F527BD7 /* SayMarkApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SayMarkApp.swift; sourceTree = "<group>"; };
 		336C65318C2A54C41652517F /* AppConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfig.swift; sourceTree = "<group>"; };
 		3A8A17801F3EFFE675F603CE /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
@@ -157,6 +159,7 @@
 			children = (
 				336C65318C2A54C41652517F /* AppConfig.swift */,
 				26CB68B600C2C97B1F527BD7 /* SayMarkApp.swift */,
+				2460D4B55DA617B1BC4B8181 /* UIConstants.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -277,6 +280,7 @@
 				9586C12AC4104279C8C1EB77 /* RootView.swift in Sources */,
 				5D3B6DB8204DAEF7EB40E8BF /* SayMarkApp.swift in Sources */,
 				39F89E534DC36A62E2930D57 /* SpeechRecognizer.swift in Sources */,
+				4A29B2FDA476FE11A0B22B3B /* UIConstants.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
