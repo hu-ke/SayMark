@@ -418,7 +418,7 @@ async def chat_stream(body: ChatRequest):
         messages.append({"role": "user", "content": text})
 
         # 5. Agent 循环：Think → Act → Observe
-        yield _step("🤔 AI 正在分析请求...")
+        yield _step("AI 正在分析请求...")
         final_reply: str | None = None
 
         for iteration in range(_MAX_AGENT_ITERATIONS):
@@ -438,7 +438,7 @@ async def chat_stream(body: ChatRequest):
                 import asyncio
                 for char in ai_thought:
                     accumulated += char
-                    yield _think_text("🤔 " + accumulated)
+                    yield _think_text(accumulated)
                     await asyncio.sleep(0.015)  # 打字机效果
 
             # 路径 A：有 tool_calls → 执行工具，反馈观察

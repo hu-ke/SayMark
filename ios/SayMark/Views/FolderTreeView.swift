@@ -14,7 +14,10 @@ struct FolderTreeView: View {
     @State private var deleteTargetId: String?
     @State private var deleteTargetName: String?
     @State private var deleteIsFolder = false
-    @State private var pushNewItem = false
+    @State private var addPopoverFolderId: String? = nil
+    @State private var addPopoverFolderName: String = ""
+    @State private var pushNewItemParentId: String? = nil
+    @State private var pushNewItemType: String? = nil
 
     var body: some View {
         NavigationStack {
@@ -27,17 +30,6 @@ struct FolderTreeView: View {
                             TabIcon(type: "chat", size: 18, color: UIConstants.blue, strokeWidth: 2)
                                 .frame(width: 32, height: 32)
                                 .background(UIConstants.blue.opacity(0.1))
-                                .clipShape(RoundedRectangle(cornerRadius: 8))
-                        }
-
-                        Button {
-                            pushNewItem = true
-                        } label: {
-                            Image(systemName: "plus")
-                                .font(.system(size: 18, weight: .medium))
-                                .foregroundColor(.white)
-                                .frame(width: 32, height: 32)
-                                .background(UIConstants.blue)
                                 .clipShape(RoundedRectangle(cornerRadius: 8))
                         }
                     }
@@ -71,10 +63,32 @@ struct FolderTreeView: View {
             // 隐藏的 NavigationLink，用于 push 到新建页面
             .background(
                 NavigationLink(
-                    destination: NewItemSheet(viewModel: viewModel, parentId: nil),
-                    isActive: $pushNewItem
+                    destination: NewItemSheet(viewModel: viewModel, parentId: pushNewItemParentId, preSelectedType: pushNewItemType),
+                    isActive: Binding(
+                        get: { pushNewItemParentId != nil },
+                        set: { if !$0 { pushNewItemParentId = nil; pushNewItemType = nil } }
+                    )
                 ) { EmptyView() }
             )
+        }
+        // 文件夹添加菜单浮层
+        .overlay {
+            if let folderId = addPopoverFolderId {
+                FolderAddMenuOverlay(
+                    folderName: addPopoverFolderName,
+                    onDismiss: { addPopoverFolderId = nil },
+                    onAddFile: {
+                        addPopoverFolderId = nil
+                        pushNewItemParentId = folderId
+                        pushNewItemType = "file"
+                    },
+                    onNewDir: {
+                        addPopoverFolderId = nil
+                        pushNewItemParentId = folderId
+                        pushNewItemType = "folder"
+                    }
+                )
+            }
         }
         // 自定义删除确认弹窗
         .overlay {
@@ -217,7 +231,12 @@ struct FolderTreeView: View {
                             showDeleteAlert: $showDeleteAlert,
                             deleteTargetId: $deleteTargetId,
                             deleteTargetName: $deleteTargetName,
-                        deleteIsFolder: $deleteIsFolder
+                            deleteIsFolder: $deleteIsFolder,
+                            addPopoverFolderId: $addPopoverFolderId,
+                            onAddTap: { id, name in
+                                addPopoverFolderId = id
+                                addPopoverFolderName = name
+                            }
                         )
                     }
                 }
@@ -242,6 +261,10 @@ struct FolderCard: View {
     @Binding var deleteTargetId: String?
     @Binding var deleteTargetName: String?
     @Binding var deleteIsFolder: Bool
+    @Binding var addPopoverFolderId: String?
+    var onAddTap: ((String, String) -> Void)? = nil
+
+    var isAddMenuOpen: Bool { addPopoverFolderId == node.id }
 
     @State private var showRenameSheet = false
 
@@ -284,8 +307,11 @@ struct FolderCard: View {
                         showDeleteAlert: $showDeleteAlert,
                         deleteTargetId: $deleteTargetId,
                         deleteTargetName: $deleteTargetName,
-                        deleteIsFolder: $deleteIsFolder
+                        deleteIsFolder: $deleteIsFolder,
+                        isAddMenuOpen: addPopoverFolderId == child.id,
+                        onAddTap: onAddTap
                     )
+                    .padding(.leading, 20)
                 }
             }
         }
@@ -327,6 +353,19 @@ struct FolderCard: View {
                         .font(.system(size: 13))
                         .foregroundColor(UIConstants.label3)
                 }
+                Button {
+                    onAddTap?(node.id, node.name)
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(isAddMenuOpen ? .white : UIConstants.blue)
+                        .frame(width: 28, height: 28)
+                        .background(
+                            Circle()
+                                .fill(isAddMenuOpen ? UIConstants.blue : UIConstants.blue.opacity(0.1))
+                        )
+                }
+                .buttonStyle(.plain)
                 Image(systemName: "chevron.right")
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(UIConstants.label3)
@@ -414,6 +453,8 @@ struct SubFolderRow: View {
     @Binding var deleteTargetId: String?
     @Binding var deleteTargetName: String?
     @Binding var deleteIsFolder: Bool
+    var isAddMenuOpen: Bool = false
+    var onAddTap: ((String, String) -> Void)? = nil
 
     @State private var showRenameSheet = false
     var isExpanded: Bool { expandedFolders.contains(node.id) }
@@ -444,6 +485,19 @@ struct SubFolderRow: View {
                             .font(.system(size: 13))
                             .foregroundColor(UIConstants.label3)
                     }
+                    Button {
+                        onAddTap?(node.id, node.name)
+                    } label: {
+                        Image(systemName: "plus")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(isAddMenuOpen ? .white : UIConstants.blue)
+                            .frame(width: 28, height: 28)
+                            .background(
+                                Circle()
+                                    .fill(isAddMenuOpen ? UIConstants.blue : UIConstants.blue.opacity(0.1))
+                            )
+                    }
+                    .buttonStyle(.plain)
                     Image(systemName: "chevron.right")
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(UIConstants.label3)
@@ -455,7 +509,6 @@ struct SubFolderRow: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .padding(.leading, 36)
             .contextMenu {
                 Button {
                     deleteTargetId = node.id
@@ -739,6 +792,100 @@ struct DeleteConfirmDialog: View {
             )
             .clipShape(RoundedRectangle(cornerRadius: 14))
             .shadow(color: .black.opacity(0.45), radius: 64, y: 24)
+        }
+    }
+}
+
+// MARK: - Folder Add Menu Overlay (matches "iOS App UI Redesign" SCREEN 1)
+struct FolderAddMenuOverlay: View {
+    let folderName: String
+    let onDismiss: () -> Void
+    let onAddFile: () -> Void
+    let onNewDir: () -> Void
+
+    var body: some View {
+        ZStack {
+            // Invisible backdrop to dismiss
+            Color.black.opacity(0.01)
+                .ignoresSafeArea()
+                .onTapGesture { onDismiss() }
+
+            // Popover card — positioned top-right
+            VStack {
+                HStack {
+                    Spacer()
+                    VStack(spacing: 0) {
+                        // Header
+                        HStack {
+                            Text("添加到「\(folderName)」")
+                                .font(.system(size: 12))
+                                .foregroundColor(UIConstants.label3)
+                                .fontWeight(.medium)
+                            Spacer()
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+
+                        Rectangle()
+                            .fill(UIConstants.separator)
+                            .frame(height: 0.5)
+
+                        // Option: 添加文件
+                        Button(action: onAddFile) {
+                            HStack(spacing: 12) {
+                                RowIcon(systemName: "doc.text.fill", color: UIConstants.label3)
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text("添加文件")
+                                        .font(.system(size: 15, weight: .medium))
+                                        .foregroundColor(UIConstants.label)
+                                    Text("创建新笔记")
+                                        .font(.system(size: 12))
+                                        .foregroundColor(UIConstants.label3)
+                                }
+                                Spacer()
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 13)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+
+                        Rectangle()
+                            .fill(UIConstants.separator)
+                            .frame(height: 0.5)
+
+                        // Option: 新建目录
+                        Button(action: onNewDir) {
+                            HStack(spacing: 12) {
+                                RowIcon(systemName: "folder.fill", color: UIConstants.blue)
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text("新建目录")
+                                        .font(.system(size: 15, weight: .medium))
+                                        .foregroundColor(UIConstants.label)
+                                    Text("在此文件夹下创建子目录")
+                                        .font(.system(size: 12))
+                                        .foregroundColor(UIConstants.label3)
+                                }
+                                Spacer()
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 13)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .frame(width: 260)
+                    .background(
+                        Color.white.opacity(0.96)
+                            .background(Material.regular)
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                    .shadow(color: .black.opacity(0.18), radius: 16, y: 4)
+                    .padding(.trailing, 16)
+                    .padding(.top, 12)
+                }
+                Spacer()
+            }
         }
     }
 }

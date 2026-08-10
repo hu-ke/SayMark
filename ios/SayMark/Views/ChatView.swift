@@ -10,6 +10,7 @@ struct ChatView: View {
     @State private var textEditOpen = false
     @State private var textEditContent = ""
     @State private var hasSentInitial = false
+    @State private var isVoiceMode = true
 
     @FocusState private var isFocused: Bool
 
@@ -40,9 +41,7 @@ struct ChatView: View {
                         Button {
                             viewModel.newConversation()
                         } label: {
-                            Image(systemName: "square.and.pencil")
-                                .font(.system(size: 20))
-                                .foregroundColor(UIConstants.blue)
+                            TabIcon(type: "plus", size: 22, color: UIConstants.blue)
                         }
 
                         Button {
@@ -145,42 +144,70 @@ struct ChatView: View {
 
     // MARK: - Input Bar
     private var inputBar: some View {
-        HStack(alignment: .bottom, spacing: 8) {
-            Button {
-                textEditOpen = true; textEditContent = ""
-            } label: {
-                Image(systemName: "mic.fill")
-                    .font(.system(size: 18)).foregroundColor(.white)
-                    .frame(width: 36, height: 36)
-                    .background(Circle().fill(UIConstants.blue))
-            }
-
-            HStack {
-                if inputText.isEmpty {
-                    Text("继续说话或输入...").foregroundColor(UIConstants.label3)
+        VStack(spacing: 0) {
+            HDSeparator()
+            HStack(alignment: .bottom, spacing: 8) {
+                // Left: toggle button (keyboard ↔ mic)
+                Button {
+                    isVoiceMode.toggle()
+                } label: {
+                    TabIcon(
+                        type: isVoiceMode ? "keyboard" : "mic",
+                        size: 26,
+                        color: UIConstants.label2
+                    )
                 }
-                TextField("", text: $inputText)
-                    .focused($isFocused).submitLabel(.send).onSubmit { sendMessage() }
-            }
-            .font(.system(size: 16))
-            .padding(.horizontal, 14).padding(.vertical, 8)
-            .frame(minHeight: 36)
-            .background(UIConstants.background)
-            .clipShape(RoundedRectangle(cornerRadius: 20))
-            .overlay(RoundedRectangle(cornerRadius: 20).stroke(UIConstants.separator, lineWidth: 1))
+                .frame(width: 36, height: 36)
 
-            if !inputText.trimmingCharacters(in: .whitespaces).isEmpty {
-                Button(action: sendMessage) {
-                    Image(systemName: "arrow.up")
-                        .font(.system(size: 18, weight: .medium)).foregroundColor(.white)
-                        .frame(width: 36, height: 36)
-                        .background(Circle().fill(UIConstants.blue))
+                // Center: voice button or text field
+                if isVoiceMode {
+                    Button {
+                        textEditOpen = true
+                        textEditContent = ""
+                    } label: {
+                        Text("按住 说话")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(UIConstants.label2)
+                            .kerning(-0.24)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 36)
+                    .background(Color.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay(RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color(red: 0.235, green: 0.235, blue: 0.263).opacity(0.2), lineWidth: 1))
+                } else {
+                    HStack {
+                        TextField("输入消息...", text: $inputText)
+                            .focused($isFocused)
+                            .submitLabel(.send)
+                            .onSubmit { sendMessage() }
+                    }
+                    .font(.system(size: 16))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 7)
+                    .frame(minHeight: 36)
+                    .background(Color.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay(RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color(red: 0.235, green: 0.235, blue: 0.263).opacity(0.22), lineWidth: 1))
+                }
+
+                // Right: send button (text mode with text only, no emoji)
+                if !isVoiceMode && !inputText.trimmingCharacters(in: .whitespaces).isEmpty {
+                    Button(action: sendMessage) {
+                        Image(systemName: "arrow.up")
+                            .font(.system(size: 18, weight: .medium))
+                            .foregroundColor(.white)
+                            .frame(width: 36, height: 36)
+                            .background(RoundedRectangle(cornerRadius: 8).fill(UIConstants.blue))
+                    }
                 }
             }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .padding(.bottom, 28)
         }
-        .padding(.horizontal, 12).padding(.vertical, 8).padding(.bottom, 28)
-        .background(Color.white)
-        .overlay(alignment: .top) { HDSeparator() }
+        .background(Color(red: 0.969, green: 0.969, blue: 0.969))
     }
 
     // MARK: - Message Row
@@ -277,16 +304,7 @@ struct ChatView: View {
 
             VStack(spacing: 0) {
                 Color.clear.frame(height: 59)
-                HStack {
-                    Text("历史会话").font(.system(size: 18, weight: .bold))
-                    Spacer()
-                    Button {
-                        viewModel.newConversation()
-                        withAnimation { sidebarOpen = false }
-                    } label: {
-                        Image(systemName: "square.and.pencil").font(.system(size: 20)).foregroundColor(UIConstants.blue)
-                    }
-                }
+                Text("历史会话").font(.system(size: 18, weight: .bold))
                 .padding(.horizontal, 20).padding(.vertical, 14)
 
                 ScrollView {

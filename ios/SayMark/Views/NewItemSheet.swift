@@ -4,8 +4,16 @@ struct NewItemSheet: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject var viewModel: FolderTreeViewModel
     var parentId: String?
+    var preSelectedType: String? = nil
 
-    @State private var selectedType = "folder"
+    @State private var selectedType: String
+
+    init(viewModel: FolderTreeViewModel, parentId: String? = nil, preSelectedType: String? = nil) {
+        self.viewModel = viewModel
+        self.parentId = parentId
+        self.preSelectedType = preSelectedType
+        self._selectedType = State(initialValue: preSelectedType ?? "folder")
+    }
     @State private var name = "新文件夹"
 
     var body: some View {

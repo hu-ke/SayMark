@@ -165,6 +165,10 @@ struct TabIcon: View {
             case "bell-off": BellOffIcon()
             case "folder": FolderIcon()
             case "chat":   ChatIcon()
+            case "compose": ComposeIcon()
+            case "plus":    PlusIcon()
+            case "keyboard": KeyboardIcon()
+            case "mic":     MicIcon()
             case "gear":
                 Image(systemName: "gearshape.fill")
                     .font(.system(size: size * 0.85, weight: .medium))
@@ -313,6 +317,146 @@ private struct ChatIcon: View {
                 path.closeSubpath()
             }
             .stroke(color, style: StrokeStyle(lineWidth: sw * scale, lineCap: .round, lineJoin: .round))
+            .scaleEffect(scale, anchor: .topLeading)
+            .offset(x: (s - 24*scale) / 2, y: (s - 24*scale) / 2)
+        }
+    }
+}
+
+private struct ComposeIcon: View {
+    @Environment(\.tabIconColor) var color
+    @Environment(\.tabIconStrokeWidth) var sw
+
+    var body: some View {
+        GeometryReader { geo in
+            let s: CGFloat = min(geo.size.width, geo.size.height)
+            let scale = s / 24
+            Path { path in
+                // Horizontal line at bottom
+                path.move(to: CGPoint(x: 12, y: 20))
+                path.addLine(to: CGPoint(x: 21, y: 20))
+                // Pen shape: M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4z
+                path.move(to: CGPoint(x: 16.5, y: 3.5))
+                path.addCurve(to: CGPoint(x: 19.5, y: 6.5),
+                              control1: CGPoint(x: 16.5 + 2.12*0.552, y: 3.5),
+                              control2: CGPoint(x: 19.5, y: 6.5 - 2.12*0.552))
+                path.addLine(to: CGPoint(x: 7, y: 19))
+                path.addLine(to: CGPoint(x: 3, y: 20))
+                path.addLine(to: CGPoint(x: 4, y: 16))
+                path.addLine(to: CGPoint(x: 16.5, y: 3.5))
+                path.closeSubpath()
+            }
+            .stroke(color, style: StrokeStyle(lineWidth: sw * scale, lineCap: .round, lineJoin: .round))
+            .scaleEffect(scale, anchor: .topLeading)
+            .offset(x: (s - 24*scale) / 2, y: (s - 24*scale) / 2)
+        }
+    }
+}
+
+private struct PlusIcon: View {
+    @Environment(\.tabIconColor) var color
+    @Environment(\.tabIconStrokeWidth) var sw
+
+    var body: some View {
+        GeometryReader { geo in
+            let s: CGFloat = min(geo.size.width, geo.size.height)
+            let scale = s / 24
+            Path { path in
+                // Vertical line
+                path.move(to: CGPoint(x: 12, y: 5))
+                path.addLine(to: CGPoint(x: 12, y: 19))
+                // Horizontal line
+                path.move(to: CGPoint(x: 5, y: 12))
+                path.addLine(to: CGPoint(x: 19, y: 12))
+            }
+            .stroke(color, style: StrokeStyle(lineWidth: 2.4 * scale, lineCap: .round))
+            .scaleEffect(scale, anchor: .topLeading)
+            .offset(x: (s - 24*scale) / 2, y: (s - 24*scale) / 2)
+        }
+    }
+}
+
+private struct KeyboardIcon: View {
+    @Environment(\.tabIconColor) var color
+    @Environment(\.tabIconStrokeWidth) var sw
+
+    var body: some View {
+        GeometryReader { geo in
+            let s: CGFloat = min(geo.size.width, geo.size.height)
+            let scale = s / 24
+            ZStack {
+                // Keyboard body outline
+                Path { path in
+                    path.addRoundedRect(in: CGRect(x: 2, y: 5, width: 20, height: 14), cornerSize: CGSize(width: 2, height: 2))
+                }
+                .stroke(color, style: StrokeStyle(lineWidth: 1.6 * scale, lineCap: .round, lineJoin: .round))
+                
+                // Key dots
+                let dotSize: CGFloat = 2.5 * scale
+                let keyPositions: [(CGFloat, CGFloat)] = [
+                    (6, 9), (10, 9), (14, 9), (18, 9),
+                    (6, 13), (10, 13), (14, 13), (18, 13)
+                ]
+                ForEach(Array(keyPositions.enumerated()), id: \.offset) { _, pos in
+                    Circle()
+                        .fill(color)
+                        .frame(width: dotSize, height: dotSize)
+                        .position(x: pos.0 * scale, y: pos.1 * scale)
+                }
+                
+                // Spacebar line
+                Path { path in
+                    path.move(to: CGPoint(x: 8, y: 17))
+                    path.addLine(to: CGPoint(x: 16, y: 17))
+                }
+                .stroke(color, style: StrokeStyle(lineWidth: 2 * scale, lineCap: .round))
+            }
+            .scaleEffect(scale, anchor: .topLeading)
+            .offset(x: (s - 24*scale) / 2, y: (s - 24*scale) / 2)
+        }
+    }
+}
+
+private struct MicIcon: View {
+    @Environment(\.tabIconColor) var color
+    @Environment(\.tabIconStrokeWidth) var sw
+
+    var body: some View {
+        GeometryReader { geo in
+            let s: CGFloat = min(geo.size.width, geo.size.height)
+            let scale = s / 24
+            ZStack {
+                // Mic body (filled rect)
+                Path { path in
+                    path.addRoundedRect(in: CGRect(x: 9, y: 1, width: 6, height: 13), cornerSize: CGSize(width: 3, height: 3))
+                }
+                .fill(color)
+                
+                // Arc base (with vertical ends as in reference design)
+                Path { path in
+                    path.move(to: CGPoint(x: 19, y: 10))
+                    path.addLine(to: CGPoint(x: 19, y: 12))
+                    path.addCurve(to: CGPoint(x: 5, y: 12),
+                                  control1: CGPoint(x: 19, y: 12 + 7 * 0.552),
+                                  control2: CGPoint(x: 5, y: 12 + 7 * 0.552))
+                    path.addLine(to: CGPoint(x: 5, y: 10))
+                }
+                .stroke(color, style: StrokeStyle(lineWidth: sw * scale, lineCap: .round))
+                
+                // Stand line
+                Path { path in
+                    path.move(to: CGPoint(x: 12, y: 19))
+                    path.addLine(to: CGPoint(x: 12, y: 23))
+                }
+                .stroke(color, style: StrokeStyle(lineWidth: sw * scale, lineCap: .round))
+                
+                // Base line
+                Path { path in
+                    path.move(to: CGPoint(x: 8, y: 23))
+                    path.addLine(to: CGPoint(x: 16, y: 23))
+                }
+                .stroke(color, style: StrokeStyle(lineWidth: sw * scale, lineCap: .round))
+            }
             .scaleEffect(scale, anchor: .topLeading)
             .offset(x: (s - 24*scale) / 2, y: (s - 24*scale) / 2)
         }
