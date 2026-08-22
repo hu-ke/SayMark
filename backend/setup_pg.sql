@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS folders (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     parent_id INTEGER REFERENCES folders(id) ON DELETE CASCADE,
+    position INTEGER NOT NULL DEFAULT 0,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -39,10 +40,18 @@ CREATE TABLE IF NOT EXISTS files (
     reminder_minutes INTEGER,
     recurrence VARCHAR(20) CHECK (recurrence IS NULL OR recurrence IN ('', 'daily', 'weekly', 'monthly')),
     recurrence_end_date DATE,
+    schedule TEXT DEFAULT '',
+    position INTEGER NOT NULL DEFAULT 0,
     embedding FLOAT8[] DEFAULT '{}',
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- 为已有库补齐 schedule 字段（日程属性独立存储为 JSON 字符串）
+ALTER TABLE files ADD COLUMN IF NOT EXISTS schedule TEXT DEFAULT '';
+-- 为已有库补齐 position 字段（同级排序）
+ALTER TABLE folders ADD COLUMN IF NOT EXISTS position INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE files ADD COLUMN IF NOT EXISTS position INTEGER NOT NULL DEFAULT 0;
 
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_folders_parent ON folders(parent_id);

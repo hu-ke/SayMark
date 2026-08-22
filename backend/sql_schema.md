@@ -28,11 +28,12 @@
 | `reminder_minutes` | INTEGER | 提前提醒分钟数，NULL=无提醒（仅 event） |
 | `recurrence` | VARCHAR(20) | 重复周期（仅 event）：''=一次性 / 'daily' / 'weekly' / 'monthly' |
 | `recurrence_end_date` | DATE | 重复结束日期 |
+| `schedule` | TEXT | 日程属性 JSON 字符串，独立于文件普通属性，如 `{"date":"2026-08-22","time":"10:30","repeat":{"enabled":true,"unit":"days","value":1}}` |
 | `embedding` | FLOAT8[] | 语义搜索向量 |
 | `created_at` | TIMESTAMPTZ | 创建时间 |
 | `updated_at` | TIMESTAMPTZ | 更新时间 |
 
-**区分笔记与日程**：`type='note'` 为笔记（无具体时间的备忘），`type='event'` 为日程（有明确时间安排）。日程必有 `date`，可选 `time`。
+**区分笔记与日程**：`type='note'` 为普通文件（无具体时间的备忘），`type='event'` 为日程文件（必须有 `date` 与 `time`）。日程的日期/时间/重复规则统一以 `schedule` JSON 字符串为准（独立于普通文件属性）。
 
 ### 3. users（用户）
 

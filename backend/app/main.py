@@ -10,12 +10,13 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from . import pg_ops
 from .pg_db import close_pool
-from .routers import ai, events, files, folders, geo, notes, reminders, user
+from .routers import ai, events, files, folders, geo, notes, reminders, reorder, user
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期：启动时初始化资源，关闭时释放。"""
+    await pg_ops.ensure_schema()
     await pg_ops.get_default_uncategorized_folder()
     yield
     await close_pool()
@@ -39,6 +40,7 @@ app.include_router(notes.router)
 app.include_router(ai.router)
 app.include_router(events.router)
 app.include_router(reminders.router)
+app.include_router(reorder.router)
 app.include_router(geo.router)
 app.include_router(user.router)
 

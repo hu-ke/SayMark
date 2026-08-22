@@ -41,6 +41,35 @@ async def run_safe_query(sql: str) -> list[dict]:
     return await pg_db.fetch(clean)
 
 
+_HAS_SCHEDULE = False
+_HAS_POSITION = False
+
+
+async def ensure_schema() -> None:
+    """检测新增列是否存在（不执行 ALTER，避免非 owner 用户权限不足）。
+
+    缺失时相关功能自动降级：列表按 created_at 排序、禁用位置交换。
+    """
+    global _HAS_SCHEDULE, _HAS_POSITION
+    rows = await pg_db.fetch(
+        "SELECT table_name, column_name FROM information_schema.columns "
+        "WHERE (table_name = 'files' AND column_name IN ('schedule', 'position')) "
+        "   OR (table_name = 'folders' AND column_name = 'position')"
+    )
+    _HAS_SCHEDULE = any(
+        r["table_name"] == "files" and r["column_name"] == "schedule" for r in rows
+    )
+    _HAS_POSITION = (
+        any(r["table_name"] == "files" and r["column_name"] == "position" for r in rows)
+        and any(r["table_name"] == "folders" and r["column_name"] == "position" for r in rows)
+    )
+
+
+def _position_order() -> str:
+    """返回排序子句，缺失 position 列时退回 created_at。"""
+    return "position, created_at" if _HAS_POSITION else "created_at"
+
+
 # ----------------------------- 文件夹 -----------------------------
 
 
@@ -54,10 +83,18 @@ async def create_folder(name: str, parent_id: int | None = None) -> dict:
     )
     if existing:
         return existing
-    result = await pg_db.execute(
-        "INSERT INTO folders (name, parent_id, created_at, updated_at) VALUES ($1, $2, $3, $3) RETURNING id",
-        name, parent_id, now,
-    )
+    if _HAS_POSITION:
+        result = await pg_db.execute(
+            """INSERT INTO folders (name, parent_id, position, created_at, updated_at)
+               VALUES ($1, $2, COALESCE((SELECT MAX(position) + 1 FROM folders WHERE parent_id IS NOT DISTINCT FROM $2), 0), $3, $3)
+               RETURNING id""",
+            name, parent_id, now,
+        )
+    else:
+        result = await pg_db.execute(
+            "INSERT INTO folders (name, parent_id, created_at, updated_at) VALUES ($1, $2, $3, $3) RETURNING id",
+            name, parent_id, now,
+        )
     new_id = int(result.split()[-1])
     return await pg_db.fetchrow("SELECT id, name, parent_id, created_at, updated_at FROM folders WHERE id=$1", new_id)
 
@@ -68,15 +105,20 @@ async def get_folder(folder_id: int) -> dict | None:
 
 
 async def list_root_folders() -> list[dict]:
-    return await pg_db.fetch("SELECT id, name, parent_id, created_at, updated_at FROM folders WHERE parent_id IS NULL ORDER BY created_at")
+    return await pg_db.fetch(
+        f"SELECT id, name, parent_id, created_at, updated_at FROM folders WHERE parent_id IS NULL ORDER BY {_position_order()}"
+    )
 
 
 async def list_children(folder_id: int) -> dict:
     folder_id = int(folder_id)
-    folders = await pg_db.fetch("SELECT id, name, parent_id, created_at, updated_at FROM folders WHERE parent_id=$1 ORDER BY created_at", folder_id)
+    order = _position_order()
+    folders = await pg_db.fetch(
+        f"SELECT id, name, parent_id, created_at, updated_at FROM folders WHERE parent_id=$1 ORDER BY {order}", folder_id
+    )
     files = await pg_db.fetch(
         'SELECT id, name, type, date, "time", reminder_minutes, recurrence, recurrence_end_date, created_at, updated_at '
-        "FROM files WHERE parent_id=$1 ORDER BY created_at", folder_id
+        f"FROM files WHERE parent_id=$1 ORDER BY {order}", folder_id
     )
     return {"folders": folders, "files": files}
 
@@ -94,6 +136,69 @@ async def delete_folder(folder_id: int) -> bool:
     folder_id = int(folder_id)
     r = await pg_db.execute("DELETE FROM folders WHERE id=$1", folder_id)
     return not r.endswith("0")
+
+
+async def _is_descendant(folder_id: int, target_folder_id: int) -> bool:
+    """判断 target_folder_id 是否位于 folder_id 的子树内（用于阻止循环移动）。"""
+    rows = await pg_db.fetch("""
+        WITH RECURSIVE path AS (
+            SELECT id, parent_id FROM folders WHERE id=$1
+            UNION ALL
+            SELECT f.id, f.parent_id FROM folders f JOIN path p ON f.id = p.parent_id
+        )
+        SELECT 1 FROM path WHERE id=$2 LIMIT 1
+    """, target_folder_id, folder_id)
+    return len(rows) > 0
+
+
+async def move_folder(folder_id: int, target_folder_id: int | None = None) -> dict | None:
+    """移动文件夹到目标文件夹（target_folder_id 为 None 表示顶级）。"""
+    folder_id = int(folder_id)
+    if target_folder_id is not None:
+        target_folder_id = int(target_folder_id)
+        if folder_id == target_folder_id:
+            raise ValueError("不能将文件夹移动到自身")
+        if await _is_descendant(folder_id, target_folder_id):
+            raise ValueError("不能将文件夹移动到其子文件夹中")
+    now = _now()
+    r = await pg_db.execute("UPDATE folders SET parent_id=$1, updated_at=$2 WHERE id=$3", target_folder_id, now, folder_id)
+    if r.endswith("0"):
+        return None
+    return await get_folder(folder_id)
+
+
+async def swap_item_positions(item_type: str, id1: int, id2: int) -> bool:
+    """交换两个同类型、同一父级项的位置（type: 'file' 或 'folder'）。"""
+    if not _HAS_POSITION:
+        raise ValueError("数据库缺少 position 字段，无法交换位置；请以数据库所有者身份运行 setup_pg.sql 迁移")
+    if item_type not in ("file", "folder"):
+        raise ValueError("type 必须为 file 或 folder")
+    id1 = int(id1)
+    id2 = int(id2)
+    if id1 == id2:
+        return True
+
+    table = "files" if item_type == "file" else "folders"
+    row1 = await pg_db.fetchrow_raw(f"SELECT id, parent_id FROM {table} WHERE id=$1", id1)
+    row2 = await pg_db.fetchrow_raw(f"SELECT id, parent_id FROM {table} WHERE id=$1", id2)
+    if row1 is None or row2 is None:
+        return False
+    if row1["parent_id"] != row2["parent_id"]:
+        raise ValueError("只能交换同一层级下的两个项")
+
+    # 先归一化同级位置（历史数据 position 可能都为 0）
+    siblings = await pg_db.fetch_raw(
+        f"SELECT id FROM {table} WHERE parent_id IS NOT DISTINCT FROM $1 ORDER BY position, created_at, id",
+        row1["parent_id"],
+    )
+    pos_by_id: dict[int, int] = {}
+    for idx, s in enumerate(siblings):
+        pos_by_id[s["id"]] = idx
+        await pg_db.execute(f"UPDATE {table} SET position=$1 WHERE id=$2", idx, s["id"])
+
+    await pg_db.execute(f"UPDATE {table} SET position=$1 WHERE id=$2", pos_by_id[id2], id1)
+    await pg_db.execute(f"UPDATE {table} SET position=$1 WHERE id=$2", pos_by_id[id1], id2)
+    return True
 
 
 async def get_folder_path(folder_id: int) -> list[dict]:
@@ -125,26 +230,63 @@ async def get_default_uncategorized_folder() -> dict:
 async def create_file(
     name: str, content: str, parent_id: int,
     file_type: str = "note", date: str = "", time: str = "",
+    schedule: Optional[dict] = None,
 ) -> dict:
     parent_id = int(parent_id)
     now = _now()
+
+    # 日程属性统一以 schedule JSON 为准（新创建入口）；老入口仍兼容 date/time/file_type 传参
+    if schedule is not None:
+        file_type = "event"
+        date = str(schedule.get("date") or date)
+        time = str(schedule.get("time") or time)
+        schedule_json = json.dumps(schedule, ensure_ascii=False)
+    elif file_type == "event":
+        schedule_json = json.dumps({
+            "date": date, "time": time,
+            "repeat": {"enabled": False, "unit": "", "value": 0},
+        }, ensure_ascii=False)
+    else:
+        schedule_json = ""
+
     date_obj = datetime.strptime(date, "%Y-%m-%d").date() if date else None
     time_obj = datetime.strptime(time, "%H:%M").time() if time else None
-    result = await pg_db.execute(
-        """INSERT INTO files (name, content, parent_id, type, date, "time", created_at, updated_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $7) RETURNING id""",
-        name, content, parent_id, file_type, date_obj, time_obj, now,
-    )
+
+    if _HAS_SCHEDULE and _HAS_POSITION:
+        sql = """INSERT INTO files (name, content, parent_id, type, date, "time", schedule, position, created_at, updated_at)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7,
+                         COALESCE((SELECT MAX(position) + 1 FROM files WHERE parent_id = $3), 0), $8, $8)
+                 RETURNING id"""
+        args = [name, content, parent_id, file_type, date_obj, time_obj, schedule_json, now]
+    elif _HAS_SCHEDULE:
+        sql = """INSERT INTO files (name, content, parent_id, type, date, "time", schedule, created_at, updated_at)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)
+                 RETURNING id"""
+        args = [name, content, parent_id, file_type, date_obj, time_obj, schedule_json, now]
+    elif _HAS_POSITION:
+        sql = """INSERT INTO files (name, content, parent_id, type, date, "time", position, created_at, updated_at)
+                 VALUES ($1, $2, $3, $4, $5, $6,
+                         COALESCE((SELECT MAX(position) + 1 FROM files WHERE parent_id = $3), 0), $7, $7)
+                 RETURNING id"""
+        args = [name, content, parent_id, file_type, date_obj, time_obj, now]
+    else:
+        sql = """INSERT INTO files (name, content, parent_id, type, date, "time", created_at, updated_at)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $7)
+                 RETURNING id"""
+        args = [name, content, parent_id, file_type, date_obj, time_obj, now]
+
+    result = await pg_db.execute(sql, *args)
     new_id = int(result.split()[-1])
     return await get_file(new_id)
 
 
 async def get_file(file_id: int) -> dict | None:
     file_id = int(file_id)
-    return await pg_db.fetchrow(
-        'SELECT id, name, content, parent_id, type, date, "time", reminder_minutes, recurrence, recurrence_end_date, created_at, updated_at FROM files WHERE id=$1',
-        file_id,
-    )
+    if _HAS_SCHEDULE:
+        sql = 'SELECT id, name, content, parent_id, type, date, "time", reminder_minutes, recurrence, recurrence_end_date, schedule, created_at, updated_at FROM files WHERE id=$1'
+    else:
+        sql = 'SELECT id, name, content, parent_id, type, date, "time", reminder_minutes, recurrence, recurrence_end_date, created_at, updated_at FROM files WHERE id=$1'
+    return await pg_db.fetchrow(sql, file_id)
 
 
 async def update_file_name(file_id: int, name: str) -> dict | None:
@@ -287,10 +429,11 @@ async def add_user_place(device_id: str, name: str, lat: float, lon: float) -> d
 
 async def get_folder_tree() -> list[dict]:
     """返回完整目录树。"""
-    folders = await pg_db.fetch("SELECT id, name, parent_id, created_at, updated_at FROM folders ORDER BY created_at")
+    order = _position_order()
+    folders = await pg_db.fetch(f"SELECT id, name, parent_id, created_at, updated_at FROM folders ORDER BY {order}")
     files = await pg_db.fetch(
         'SELECT id, name, type, date, "time", reminder_minutes, recurrence, recurrence_end_date, created_at, updated_at, parent_id '
-        "FROM files ORDER BY created_at"
+        f"FROM files ORDER BY {order}"
     )
 
     folders_by_parent: dict = {}
@@ -308,7 +451,7 @@ async def get_folder_tree() -> list[dict]:
         child_files = files_by_parent.get(fid, [])
         return {**folder_doc, "children": child_folders, "files": child_files}
 
-    roots = sorted(folders_by_parent.get(None, []), key=lambda d: d.get("created_at", ""))
+    roots = list(folders_by_parent.get(None, []))
     return [build_node(r) for r in roots]
 
 

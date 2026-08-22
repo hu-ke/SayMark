@@ -128,12 +128,14 @@ final class APIClient {
         try await request(path: "/api/files/\(id)", method: "GET")
     }
 
-    func createFile(name: String, content: String, parentId: String) async throws -> NoteFile {
+    func createFile(name: String, content: String, parentId: String, type: String = "note", schedule: SchedulePayload? = nil) async throws -> NoteFile {
         struct Body: Encodable {
             let name: String; let content: String; let parent_id: String
+            let type: String
+            let schedule: SchedulePayload?
         }
         return try await request(path: "/api/files", method: "POST",
-                                 body: Body(name: name, content: content, parent_id: parentId))
+                                 body: Body(name: name, content: content, parent_id: parentId, type: type, schedule: schedule))
     }
 
     func renameFile(id: String, name: String?) async throws {
@@ -155,6 +157,22 @@ final class APIClient {
         struct Body: Encodable { let target_folder_id: String }
         try await requestEmpty(path: "/api/files/\(id)/move", method: "PUT",
                                body: Body(target_folder_id: targetFolderId))
+    }
+
+    func moveFolder(id: String, targetFolderId: String?) async throws {
+        struct Body: Encodable { let target_folder_id: String? }
+        try await requestEmpty(path: "/api/folders/\(id)/move", method: "PUT",
+                               body: Body(target_folder_id: targetFolderId))
+    }
+
+    func reorder(type: String, sourceId: String, targetId: String) async throws {
+        struct Body: Encodable {
+            let type: String
+            let source_id: String
+            let target_id: String
+        }
+        try await requestEmpty(path: "/api/reorder", method: "PUT",
+                               body: Body(type: type, source_id: sourceId, target_id: targetId))
     }
 
     // MARK: - 笔记与 AI 指令

@@ -38,6 +38,7 @@ final class ChatViewModel: ObservableObject {
     private var typewriterTask: Task<Void, Never>?
     private var currentStreamTask: Task<Void, Never>?
     private var pendingStepFullText: String?
+    private var currentThinkingId: String?  // 当前轮次的思考卡片 id（每轮独立）
 
     var hasActiveConversation: Bool { !currentConversationId.isEmpty }
 
@@ -58,6 +59,7 @@ final class ChatViewModel: ObservableObject {
 
         isStreaming = true
         error = nil
+        currentThinkingId = nil  // 新一轮对话：使用独立的思考卡片
 
         currentStreamTask = Task { await streamChat(text: trimmed) }
     }
@@ -67,6 +69,7 @@ final class ChatViewModel: ObservableObject {
         currentStreamTask?.cancel()
         typewriterTask?.cancel()
         pendingStepFullText = nil
+        currentThinkingId = nil
         currentConversationId = conv.id
         messages = []
         isStreaming = false
@@ -76,9 +79,18 @@ final class ChatViewModel: ObservableObject {
         currentStreamTask?.cancel()
         typewriterTask?.cancel()
         pendingStepFullText = nil
+        currentThinkingId = nil
         currentConversationId = ""
         messages = []
         isStreaming = false
+    }
+
+    /// 展开/折叠某条思考卡片
+    func toggleThinking(id: String) {
+        guard let idx = messages.firstIndex(where: { $0.id == id }) else { return }
+        var msg = messages[idx]
+        msg.isExpanded.toggle()
+        messages[idx] = msg
     }
 
     // MARK: - 真正的流式接收（token 到了立刻显示）
@@ -132,44 +144,45 @@ final class ChatViewModel: ObservableObject {
                     continue
                 }
 
-                // 解析结构化 thinking 事件
+                // 解析结构化 thinking 事件（每轮独立一张思考卡片）
                 if let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
                     if let title = obj["thinking_start"] as? String {
-                        // 避免重复创建卡片（thinking_text 可能已先创建）
-                        if messages.lastIndex(where: { $0.role == .thinkingGroup }) == nil {
-                            var card = ChatMessage(id: UUID().uuidString, role: .thinkingGroup, content: title, isStreaming: false, isThinking: true, steps: [], isExpanded: true, liveText: "")
+                        if currentThinkingId == nil {
+                            let card = ChatMessage(id: UUID().uuidString, role: .thinkingGroup, content: title, isStreaming: false, isThinking: true, steps: [], isExpanded: true, liveText: "")
                             messages.append(card)
+                            currentThinkingId = card.id
                         }
                         continue
                     }
                     if let stepText = obj["thinking_step"] as? String {
-                        // 打字机效果：逐步显示步骤文本
                         startTypewriterStep(stepText)
                         continue
                     }
                     if let _ = obj["thinking_end"] {
                         typewriterTask?.cancel()
-                        if let idx = messages.lastIndex(where: { $0.role == .thinkingGroup }) {
-                            // 确保最后一条 typesetting step 完整展示
-                            if let lastStep = messages[idx].steps.last, lastStep.isEmpty || lastStep.count < (pendingStepFullText?.count ?? 0) {
-                                if let full = pendingStepFullText {
-                                    messages[idx].steps[messages[idx].steps.count - 1] = full
-                                }
+                        if let id = currentThinkingId,
+                           let idx = messages.firstIndex(where: { $0.id == id }) {
+                            if let lastStep = messages[idx].steps.last,
+                               let full = pendingStepFullText,
+                               lastStep.isEmpty || lastStep.count < full.count {
+                                messages[idx].steps[messages[idx].steps.count - 1] = full
                             }
                             let count = messages[idx].steps.count
-                            messages[idx] = ChatMessage(id: messages[idx].id, role: .thinkingGroup, content: "处理完成（\(count)步）", isStreaming: false, isThinking: true, steps: messages[idx].steps, isExpanded: false, liveText: "")
+                            messages[idx] = ChatMessage(id: id, role: .thinkingGroup, content: "处理完成（\(count)步）", isStreaming: false, isThinking: true, steps: messages[idx].steps, isExpanded: false, liveText: "")
                         }
                         pendingStepFullText = nil
+                        currentThinkingId = nil
                         continue
                     }
-                    // 服务端已逐字发送的思考过程实时文本
+                    // 服务端逐字发送的思考实时文本（打字机效果）
                     if let thinkingText = obj["thinking_text"] as? String {
-                        if let idx = messages.lastIndex(where: { $0.role == .thinkingGroup }) {
+                        if let id = currentThinkingId,
+                           let idx = messages.firstIndex(where: { $0.id == id }) {
                             messages[idx].liveText = thinkingText
                         } else {
-                            // thinking_text 可能在 thinking_start 之前到达，先创建卡片
-                            var card = ChatMessage(id: UUID().uuidString, role: .thinkingGroup, content: "正在处理...", isStreaming: false, isThinking: true, steps: [], isExpanded: true, liveText: thinkingText)
+                            let card = ChatMessage(id: UUID().uuidString, role: .thinkingGroup, content: "正在处理...", isStreaming: false, isThinking: true, steps: [], isExpanded: true, liveText: thinkingText)
                             messages.append(card)
+                            currentThinkingId = card.id
                         }
                         continue
                     }
@@ -220,6 +233,7 @@ final class ChatViewModel: ObservableObject {
     private func finishStream(error: String?) {
         typewriterTask?.cancel()
         pendingStepFullText = nil
+        currentThinkingId = nil
         isStreaming = false
         if let error = error {
             self.error = error
@@ -234,7 +248,8 @@ final class ChatViewModel: ObservableObject {
 
     /// 逐步显示思考步骤文本，产生打字机效果
     private func startTypewriterStep(_ fullText: String) {
-        guard let idx = messages.lastIndex(where: { $0.role == .thinkingGroup }) else { return }
+        guard let thinkingId = currentThinkingId,
+              let idx = messages.firstIndex(where: { $0.id == thinkingId }) else { return }
 
         // 先取消上一个步骤的打字机任务
         typewriterTask?.cancel()
@@ -249,7 +264,7 @@ final class ChatViewModel: ObservableObject {
         // 将新步骤以空字符串占位加入
         messages[idx].steps.append("")
         let stepIndex = messages[idx].steps.count - 1
-        let msgId = messages[idx].id
+        let msgId = thinkingId
         pendingStepFullText = fullText
 
         typewriterTask = Task {
@@ -257,7 +272,7 @@ final class ChatViewModel: ObservableObject {
             for char in fullText {
                 guard !Task.isCancelled else { return }
                 revealed.append(char)
-                if let idx2 = messages.lastIndex(where: { $0.role == .thinkingGroup && $0.id == msgId }),
+                if let idx2 = messages.firstIndex(where: { $0.id == msgId }),
                    stepIndex < messages[idx2].steps.count {
                     messages[idx2].steps[stepIndex] = revealed
                 }

@@ -57,20 +57,19 @@ struct RootView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                if !viewModel.hideFloatingButton {
-                    SayMarkTabBar(
-                        selectedTab: $selectedTab,
-                        onRecordStart: { startRecording() },
-                        onRecordChanged: { zone in
-                            withAnimation(.easeInOut(duration: 0.15)) {
-                                recordingZone = zone
-                            }
-                        },
-                        onRecordEnd: { zone in
-                            stopRecording(zone: zone)
+                SayMarkTabBar(
+                    selectedTab: $selectedTab,
+                    showMic: !viewModel.hideFloatingButton,
+                    onRecordStart: { startRecording() },
+                    onRecordChanged: { zone in
+                        withAnimation(.easeInOut(duration: 0.15)) {
+                            recordingZone = zone
                         }
-                    )
-                }
+                    },
+                    onRecordEnd: { zone in
+                        stopRecording(zone: zone)
+                    }
+                )
             }
 
             // 聊天全屏
@@ -106,6 +105,12 @@ struct RootView: View {
             }
         }
         .background(UIConstants.background)
+        .onChange(of: selectedTab) { _, newTab in
+            // 每次切回「文件」列表页都刷新目录树，保证聊天/其它操作后的增删改及时可见
+            if newTab == 0 {
+                Task { await viewModel.loadTree() }
+            }
+        }
         .task {
             await viewModel.loadTree()
             LocationManager.shared.requestLocation()
@@ -174,6 +179,8 @@ struct RootView: View {
             showChat = false
         }
         pendingMessage = nil
+        // 关闭聊天返回列表页时刷新目录树（聊天中可能增删改了笔记/日程）
+        Task { await viewModel.loadTree() }
     }
 }
 

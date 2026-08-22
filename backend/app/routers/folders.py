@@ -5,7 +5,7 @@ from typing import List
 from fastapi import APIRouter, HTTPException
 
 from .. import pg_ops as crud
-from ..schemas import FolderCreate, FolderResponse, FolderTreeNode, FolderUpdate
+from ..schemas import FolderCreate, FolderMove, FolderResponse, FolderTreeNode, FolderUpdate
 
 router = APIRouter(prefix="/api/folders", tags=["folders"])
 
@@ -30,6 +30,18 @@ async def rename_folder(folder_id: str, body: FolderUpdate):
     """重命名文件夹。"""
     try:
         result = await crud.update_folder_name(folder_id, body.name)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    if result is None:
+        raise HTTPException(status_code=404, detail="文件夹不存在")
+    return result
+
+
+@router.put("/{folder_id}/move", response_model=FolderResponse)
+async def move_folder(folder_id: str, body: FolderMove):
+    """移动文件夹到目标文件夹（target_folder_id 为 null 表示顶级）。"""
+    try:
+        result = await crud.move_folder(folder_id, body.target_folder_id)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
     if result is None:

@@ -1,10 +1,12 @@
 import SwiftUI
+import UIKit
 
 struct FileDetailView: View {
     let fileId: String
     let fileName: String
 
     @StateObject private var viewModel = NoteViewModel()
+    @ObservedObject var folderTreeViewModel: FolderTreeViewModel
     @Environment(\.dismiss) private var dismiss
 
     @State private var isEditing = false
@@ -13,6 +15,20 @@ struct FileDetailView: View {
     @State private var previousContent = ""
     @State private var isVoiceEditing = false
     @State private var voiceEditText = ""
+    @State private var showRenameAlert = false
+    @State private var renameText = ""
+    @State private var showMoveSheet = false
+    @State private var exportItem: ExportItem?
+    @State private var showSavedToast = false
+    @State private var activeDialog: Dialog?
+
+    private enum Dialog: String, Identifiable {
+        case delete, unsaved
+        var id: String { rawValue }
+    }
+
+    private enum Field { case title, content }
+    @FocusState private var focusedField: Field?
 
     var body: some View {
         ZStack {
@@ -20,7 +36,7 @@ struct FileDetailView: View {
                 // 导航栏
                 HStack {
                     Button {
-                        dismiss()
+                        attemptDismiss()
                     } label: {
                         HStack(spacing: 2) {
                             Image(systemName: "chevron.left")
@@ -42,25 +58,47 @@ struct FileDetailView: View {
                     Spacer()
 
                     if isEditing {
-                        Button("保存") {
-                            saveEdit()
-                        }
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundColor(UIConstants.blue)
+                        Color.clear.frame(width: 44, height: 44)
                     } else {
-                        Button {
-                            enterEditMode()
+                        Menu {
+                            Button {
+                                renameText = viewModel.note?.name ?? fileName
+                                showRenameAlert = true
+                            } label: {
+                                Label("重命名", systemImage: "pencil")
+                            }
+                            Button {
+                                showMoveSheet = true
+                            } label: {
+                                Label("将文件移动到...", systemImage: "folder")
+                            }
+                            Button {
+                                export(type: .pdf)
+                            } label: {
+                                Label("导出 PDF", systemImage: "doc.richtext")
+                            }
+                            Button {
+                                export(type: .md)
+                            } label: {
+                                Label("导出 Markdown", systemImage: "doc.plaintext")
+                            }
+                            Button(role: .destructive) {
+                                activeDialog = .delete
+                            } label: {
+                                Label("删除文件", systemImage: "trash")
+                            }
                         } label: {
-                            Image(systemName: "pencil")
-                                .font(.system(size: 18))
+                            Image(systemName: "ellipsis")
+                                .font(.system(size: 18, weight: .medium))
                                 .foregroundColor(UIConstants.blue)
+                                .frame(width: 32, height: 32)
                         }
                     }
                 }
                 .padding(.horizontal, 16)
                 .frame(height: 44)
                 .background(
-                    (isEditing ? UIConstants.background : Color.white).opacity(0.9)
+                    UIConstants.background.opacity(0.9)
                         .background(Material.ultraThin)
                 )
                 .overlay(alignment: .bottom) {
@@ -91,12 +129,83 @@ struct FileDetailView: View {
             if isVoiceEditing {
                 voiceEditOverlay
             }
+
+            // 已保存提示
+            if showSavedToast {
+                VStack {
+                    Spacer()
+                    Text("已保存")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 10)
+                        .background(Capsule().fill(Color.black.opacity(0.75)))
+                        .padding(.bottom, 130)
+                }
+                .transition(.opacity)
+                .allowsHitTesting(false)
+                .zIndex(120)
+            }
         }
-        .background(isEditing ? UIConstants.background : Color.white)
+        .background(UIConstants.background)
         .navigationBarHidden(true)
         .task {
             viewModel.fileId = fileId
             await viewModel.reload()
+        }
+        .onAppear {
+            folderTreeViewModel.hideFloatingButton = true
+        }
+        .onDisappear {
+            folderTreeViewModel.hideFloatingButton = false
+            // 返回列表页时刷新目录树，保证详情页内的重命名/编辑/删除等改动即时可见
+            Task { await folderTreeViewModel.loadTree() }
+        }
+        .alert("重命名文件", isPresented: $showRenameAlert) {
+            TextField("名称", text: $renameText)
+            Button("取消", role: .cancel) {}
+            Button("确定") {
+                let trimmed = renameText.trimmingCharacters(in: .whitespaces)
+                guard !trimmed.isEmpty else { return }
+                Task { await viewModel.save(name: trimmed, content: viewModel.note?.content ?? "") }
+            }
+        }
+        .confirmationDialog(
+            activeDialog == .delete ? "删除文件" : "内容已更改",
+            isPresented: Binding(
+                get: { activeDialog != nil },
+                set: { if !$0 { activeDialog = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: activeDialog
+        ) { dialog in
+            switch dialog {
+            case .delete:
+                Button("删除", role: .destructive) { deleteFile() }
+                Button("取消", role: .cancel) {}
+            case .unsaved:
+                Button("保存") { saveAndDismiss() }
+                Button("不保存", role: .destructive) {
+                    isEditing = false
+                    dismiss()
+                }
+                Button("取消", role: .cancel) {}
+            }
+        } message: { dialog in
+            switch dialog {
+            case .delete:
+                Text("将删除「\(viewModel.note?.name ?? fileName)」。此操作不可撤销。")
+            case .unsaved:
+                Text("是否保存当前更改？")
+            }
+        }
+        .sheet(isPresented: $showMoveSheet) {
+            FolderMoveSheet(folders: flattenFolders(folderTreeViewModel.tree)) { folderId in
+                moveTo(folderId)
+            }
+        }
+        .sheet(item: $exportItem) { item in
+            ActivityView(activityItems: [item.url])
         }
     }
 
@@ -106,18 +215,36 @@ struct FileDetailView: View {
             VStack(alignment: .leading, spacing: 0) {
                 // 大标题
                 Text(note.name)
-                    .font(.system(size: 26, weight: .bold))
+                    .font(.system(size: 28, weight: .bold))
                     .kerning(0.3)
                     .foregroundColor(UIConstants.label)
                     .padding(.bottom, 12)
+                    .contentShape(Rectangle())
+                    .onTapGesture { enterEditMode(focus: .title) }
 
+                // 日程信息卡片
+                if note.isEvent {
+                    eventInfoCard(note)
+                }
+
+                // 正文
                 if let content = note.content, !content.isEmpty {
                     MarkdownPreview(text: content)
+                        .contentShape(Rectangle())
+                        .onTapGesture { enterEditMode(focus: .content) }
                 } else {
-                    Text("暂无内容")
-                        .font(.system(size: 16))
-                        .foregroundColor(UIConstants.label3)
-                        .padding(.top, 8)
+                    VStack(spacing: 8) {
+                        Image(systemName: "doc.text")
+                            .font(.system(size: 34))
+                            .foregroundColor(UIConstants.label3.opacity(0.5))
+                        Text("暂无内容")
+                            .font(.system(size: 16))
+                            .foregroundColor(UIConstants.label3)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 40)
+                    .contentShape(Rectangle())
+                    .onTapGesture { enterEditMode(focus: .content) }
                 }
 
                 Color.clear.frame(height: 80)
@@ -125,7 +252,49 @@ struct FileDetailView: View {
             .padding(.horizontal, 20)
             .padding(.top, 16)
         }
-        .background(Color.white)
+    }
+
+    // MARK: - Event Info Card
+    private func eventInfoCard(_ note: NoteFile) -> some View {
+        VStack(spacing: 0) {
+            eventRow(icon: "calendar", label: "日期", value: formatDate(note.date))
+
+            if !note.time.isEmpty {
+                Divider().padding(.leading, 16)
+                eventRow(icon: "clock", label: "时间", value: note.time)
+            }
+
+            let repeatLabel = note.recurrenceLabel.isEmpty ? note.scheduleRepeatLabel : note.recurrenceLabel
+            if let repeatLabel, !repeatLabel.isEmpty {
+                Divider().padding(.leading, 16)
+                eventRow(icon: "repeat", label: "重复", value: repeatLabel)
+            }
+        }
+        .cardStyle()
+        .padding(.bottom, 20)
+    }
+
+    private func eventRow(icon: String, label: String, value: String) -> some View {
+        HStack(spacing: 12) {
+            RowIcon(systemName: icon, color: UIConstants.orange)
+            Text(label)
+                .font(.system(size: 15))
+                .foregroundColor(UIConstants.label3)
+                .frame(width: 44, alignment: .leading)
+            Text(value)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundColor(UIConstants.label)
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 11)
+    }
+
+    private func formatDate(_ date: String) -> String {
+        guard !date.isEmpty else { return "" }
+        let parts = date.split(separator: "-")
+        guard parts.count == 3 else { return date }
+        return "\(Int(parts[1]) ?? 0)月\(Int(parts[2]) ?? 0)日"
     }
 
     // MARK: - Edit Mode
@@ -135,6 +304,7 @@ struct FileDetailView: View {
             TextField("标题", text: $editedTitle)
                 .font(.system(size: 17, weight: .medium))
                 .foregroundColor(UIConstants.label)
+                .focused($focusedField, equals: .title)
                 .padding(10)
                 .background(UIConstants.card)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
@@ -147,6 +317,7 @@ struct FileDetailView: View {
             TextEditor(text: $editedContent)
                 .font(.system(size: 14, design: .monospaced))
                 .foregroundColor(UIConstants.label)
+                .focused($focusedField, equals: .content)
                 .lineSpacing(6)
                 .scrollContentBackground(.hidden)
                 .padding(10)
@@ -160,6 +331,7 @@ struct FileDetailView: View {
         }
         .padding(.horizontal, 16)
         .padding(.top, 12)
+        .padding(.bottom, 12)
     }
 
     // MARK: - Bottom Toolbar
@@ -190,25 +362,23 @@ struct FileDetailView: View {
             }
             .frame(maxWidth: .infinity)
 
-            // 编辑/查看切换
-            Button {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    if isEditing {
-                        saveEdit()
-                    } else {
-                        enterEditMode()
-                    }
+            // 右下角：编辑时显示保存，非编辑时留空
+            if isEditing {
+                Button {
+                    saveEdit()
+                } label: {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 24))
+                        .foregroundColor(UIConstants.blue)
                 }
-            } label: {
-                Image(systemName: "pencil")
-                    .font(.system(size: 22))
-                    .foregroundColor(UIConstants.blue)
+                .frame(maxWidth: .infinity)
+            } else {
+                Color.clear.frame(maxWidth: .infinity)
             }
-            .frame(maxWidth: .infinity)
         }
         .frame(height: 54)
         .background(
-            (isEditing ? UIConstants.background : Color(red: 0.949, green: 0.949, blue: 0.969, opacity: 0.95))
+            Color(red: 0.949, green: 0.949, blue: 0.969, opacity: 0.95)
                 .background(Material.ultraThin)
         )
         .overlay(alignment: .top) {
@@ -235,22 +405,57 @@ struct FileDetailView: View {
     }
 
     // MARK: - Actions
-    private func enterEditMode() {
+    private var hasChanges: Bool {
+        let savedTitle = viewModel.note?.name ?? ""
+        let savedContent = viewModel.note?.content ?? ""
+        return editedTitle.trimmingCharacters(in: .whitespaces) != savedTitle
+            || editedContent != savedContent
+    }
+
+    private func enterEditMode(focus: Field? = .content) {
         editedTitle = viewModel.note?.name ?? ""
         editedContent = viewModel.note?.content ?? ""
         previousContent = viewModel.note?.content ?? ""
         withAnimation(.easeInOut(duration: 0.2)) {
             isEditing = true
         }
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            focusedField = focus
+        }
     }
 
     private func saveEdit() {
-        withAnimation(.easeInOut(duration: 0.2)) {
+        let title = trimmedTitle()
+        Task { @MainActor in
+            await viewModel.save(name: title, content: editedContent)
+            withAnimation(.easeInOut(duration: 0.2)) { isEditing = false }
+            showSavedToast = true
+            try? await Task.sleep(nanoseconds: 1_400_000_000)
+            showSavedToast = false
+        }
+    }
+
+    private func saveAndDismiss() {
+        let title = trimmedTitle()
+        Task { @MainActor in
+            await viewModel.save(name: title, content: editedContent)
             isEditing = false
+            dismiss()
         }
-        Task {
-            await viewModel.save(name: editedTitle, content: editedContent)
+    }
+
+    private func attemptDismiss() {
+        if isEditing && hasChanges {
+            activeDialog = .unsaved
+        } else {
+            dismiss()
         }
+    }
+
+    private func trimmedTitle() -> String {
+        let t = editedTitle.trimmingCharacters(in: .whitespaces)
+        return t.isEmpty ? (viewModel.note?.name ?? fileName) : t
     }
 
     private func startVoiceEdit() {
@@ -263,8 +468,161 @@ struct FileDetailView: View {
             }
             // 实际应调用 API: sendVoiceEdit
             if !isEditing {
-                enterEditMode()
+                enterEditMode(focus: .content)
             }
+        }
+    }
+
+    // MARK: - Move
+    private func moveTo(_ folderId: String) {
+        guard folderId != viewModel.note?.parentId else { return }
+        Task {
+            await folderTreeViewModel.moveFile(id: fileId, targetFolderId: folderId)
+        }
+    }
+
+    private func deleteFile() {
+        Task { @MainActor in
+            await folderTreeViewModel.deleteFile(id: fileId)
+            dismiss()
+        }
+    }
+
+    // MARK: - Export
+    private enum ExportType {
+        case pdf, md
+    }
+
+    private func export(type: ExportType) {
+        guard let note = viewModel.note else { return }
+        let title = note.name
+        let content = note.content ?? ""
+        let safeTitle = title
+            .replacingOccurrences(of: "/", with: "-")
+            .replacingOccurrences(of: ":", with: "-")
+
+        switch type {
+        case .md:
+            let md = "# \(title)\n\n\(content)"
+            if let url = writeTemp(data: Data(md.utf8), filename: "\(safeTitle).md") {
+                exportItem = ExportItem(url: url)
+            }
+        case .pdf:
+            if let url = writeTemp(data: makePDF(title: title, content: content), filename: "\(safeTitle).pdf") {
+                exportItem = ExportItem(url: url)
+            }
+        }
+    }
+
+    private func writeTemp(data: Data, filename: String) -> URL? {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
+        do {
+            try data.write(to: url)
+            return url
+        } catch {
+            return nil
+        }
+    }
+
+    private func makePDF(title: String, content: String) -> Data {
+        let pageRect = CGRect(x: 0, y: 0, width: 595, height: 842) // A4 尺寸
+        let renderer = UIGraphicsPDFRenderer(bounds: pageRect)
+        return renderer.pdfData { context in
+            context.beginPage()
+
+            let titleAttributes: [NSAttributedString.Key: Any] = [
+                .font: UIFont.boldSystemFont(ofSize: 22),
+                .foregroundColor: UIColor.black,
+            ]
+            (title as NSString).draw(at: CGPoint(x: 40, y: 40), withAttributes: titleAttributes)
+
+            let bodyAttributes: [NSAttributedString.Key: Any] = [
+                .font: UIFont.systemFont(ofSize: 12),
+                .foregroundColor: UIColor.darkGray,
+            ]
+            let bodyRect = CGRect(x: 40, y: 90, width: pageRect.width - 80, height: pageRect.height - 130)
+            (content as NSString).draw(in: bodyRect, withAttributes: bodyAttributes)
+        }
+    }
+}
+
+// MARK: - Export & Move Helpers
+
+struct ExportItem: Identifiable {
+    let url: URL
+    var id: String { url.absoluteString }
+}
+
+struct ActivityView: UIViewControllerRepresentable {
+    let activityItems: [Any]
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
+    }
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+}
+
+struct FolderPickerItem: Identifiable {
+    let id: String
+    let name: String
+    let depth: Int
+}
+
+func flattenFolders(_ nodes: [TreeNode], depth: Int = 0) -> [FolderPickerItem] {
+    var result: [FolderPickerItem] = []
+    for node in nodes {
+        result.append(FolderPickerItem(id: node.id, name: node.name, depth: depth))
+        result.append(contentsOf: flattenFolders(node.children, depth: depth + 1))
+    }
+    return result
+}
+
+struct FolderMoveSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let folders: [FolderPickerItem]
+    var onSelect: (String) -> Void
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                HStack {
+                    Button("取消") { dismiss() }
+                        .font(.system(size: 17))
+                        .foregroundColor(UIConstants.blue)
+                    Spacer()
+                    Text("移动到")
+                        .font(.system(size: 17, weight: .semibold))
+                        .kerning(-0.41)
+                    Spacer()
+                    Color.clear.frame(width: 60, height: 1)
+                }
+                .padding(.horizontal, 16)
+                .frame(height: 44)
+                .background(
+                    UIConstants.background.opacity(0.82)
+                        .background(Material.ultraThin)
+                )
+                .overlay(alignment: .bottom) { HDSeparator() }
+
+                List(folders) { item in
+                    Button {
+                        onSelect(item.id)
+                        dismiss()
+                    } label: {
+                        HStack(spacing: 10) {
+                            RowIcon(iconType: "folder", color: UIConstants.blue)
+                            Text(item.name)
+                                .font(.system(size: 16))
+                                .foregroundColor(UIConstants.label)
+                            Spacer()
+                        }
+                        .padding(.leading, CGFloat(item.depth) * 16)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+                .listStyle(.plain)
+            }
+            .background(UIConstants.background)
         }
     }
 }
@@ -278,7 +636,7 @@ struct MarkdownPreview: View {
             ForEach(Array(parseBlocks().enumerated()), id: \.offset) { _, block in
                 switch block {
                 case .heading(let content, let level):
-                    Text(content)
+                    Text(inlineMarkdown(content))
                         .font(.system(
                             size: level == 1 ? 20 : level == 2 ? 17 : 15,
                             weight: .bold
@@ -288,7 +646,7 @@ struct MarkdownPreview: View {
                         .padding(.bottom, 4)
 
                 case .body(let content):
-                    Text(content)
+                    Text(inlineMarkdown(content))
                         .font(.system(size: 16))
                         .foregroundColor(UIConstants.label)
                         .lineSpacing(4)
@@ -301,7 +659,7 @@ struct MarkdownPreview: View {
                             .fill(UIConstants.label3.opacity(0.25))
                             .frame(width: 3)
                             .padding(.trailing, 12)
-                        Text(content)
+                        Text(inlineMarkdown(content))
                             .font(.system(size: 15))
                             .italic()
                             .foregroundColor(UIConstants.label3)
@@ -313,7 +671,7 @@ struct MarkdownPreview: View {
                     HStack(alignment: .top, spacing: 6) {
                         Text("•")
                             .foregroundColor(UIConstants.label)
-                        Text(content)
+                        Text(inlineMarkdown(content))
                             .font(.system(size: 15))
                             .foregroundColor(UIConstants.label)
                             .lineSpacing(3)
@@ -327,7 +685,7 @@ struct MarkdownPreview: View {
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundColor(UIConstants.label)
                             .frame(minWidth: 20, alignment: .leading)
-                        Text(content)
+                        Text(inlineMarkdown(content))
                             .font(.system(size: 15))
                             .foregroundColor(UIConstants.label)
                             .lineSpacing(3)
@@ -337,6 +695,17 @@ struct MarkdownPreview: View {
                 }
             }
         }
+    }
+
+    /// 行内 markdown（粗体/斜体/行内代码/链接）转为富文本
+    private func inlineMarkdown(_ content: String) -> AttributedString {
+        if let attr = try? AttributedString(
+            markdown: content,
+            options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+        ) {
+            return attr
+        }
+        return AttributedString(content)
     }
 
     private enum BlockType {

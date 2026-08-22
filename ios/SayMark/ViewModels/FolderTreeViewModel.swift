@@ -50,9 +50,9 @@ final class FolderTreeViewModel: ObservableObject {
         }
     }
 
-    func createFile(name: String, content: String, parentId: String) async {
+    func createFile(name: String, content: String, parentId: String, type: String = "note", schedule: SchedulePayload? = nil) async {
         do {
-            _ = try await api.createFile(name: name, content: content, parentId: parentId)
+            _ = try await api.createFile(name: name, content: content, parentId: parentId, type: type, schedule: schedule)
             await loadTree()
         } catch {
             self.error = error.localizedDescription
@@ -80,6 +80,43 @@ final class FolderTreeViewModel: ObservableObject {
     func moveFile(id: String, targetFolderId: String) async {
         do {
             try await api.moveFile(id: id, targetFolderId: targetFolderId)
+            await loadTree()
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    func moveFolder(id: String, targetFolderId: String?) async {
+        do {
+            try await api.moveFolder(id: id, targetFolderId: targetFolderId)
+            await loadTree()
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    /// 处理拖拽落点：payload 形如 "file:<id>" 或 "folder:<id>"
+    func handleDrop(payload: String, targetFolderId: String) async {
+        let parts = payload.split(separator: ":", maxSplits: 1).map(String.init)
+        guard parts.count == 2 else { return }
+        let kind = parts[0]
+        let id = parts[1]
+        guard id != targetFolderId else { return }
+        if kind == "file" {
+            await moveFile(id: id, targetFolderId: targetFolderId)
+        } else if kind == "folder" {
+            await moveFolder(id: id, targetFolderId: targetFolderId)
+        }
+    }
+
+    /// 文件拖到另一个文件上：交换两者位置
+    func handleFileSwap(payload: String, targetId: String) async {
+        let parts = payload.split(separator: ":", maxSplits: 1).map(String.init)
+        guard parts.count == 2, parts[0] == "file" else { return }
+        let sourceId = parts[1]
+        guard sourceId != targetId else { return }
+        do {
+            try await api.reorder(type: "file", sourceId: sourceId, targetId: targetId)
             await loadTree()
         } catch {
             self.error = error.localizedDescription

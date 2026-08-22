@@ -232,8 +232,8 @@ struct ChatView: View {
             }
         default:
             HStack {
-                Text(msg.content)
-                    .font(.system(size: 16)).foregroundColor(UIConstants.label).kerning(-0.32)
+                Text(attributedMarkdown(msg.content))
+                    .font(.system(size: 16)).foregroundColor(UIConstants.label)
                     .padding(.horizontal, 14).padding(.vertical, 10)
                     .background(Color(red: 0.898, green: 0.898, blue: 0.918))
                     .clipShape(RoundedCorner(tl: 18, tr: 18, bl: 4, br: 18))
@@ -242,33 +242,54 @@ struct ChatView: View {
         }
     }
 
+    /// 将后端返回的 markdown 文本转为富文本，保证粗体/斜体/行内代码/链接/emoji 正常展示
+    private func attributedMarkdown(_ text: String) -> AttributedString {
+        if let attr = try? AttributedString(
+            markdown: text,
+            options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+        ) {
+            return attr
+        }
+        return AttributedString(text)
+    }
+
     // MARK: - Thinking Card
-    @State private var thinkExpanded = false
 
     private func thinkingCard(_ msg: ChatMessage) -> some View {
-        let steps = msg.steps ?? []
+        let steps = msg.steps
         let count = steps.count
+        let expanded = msg.isExpanded
         return VStack(spacing: 0) {
             Button {
-                withAnimation(.easeInOut(duration: 0.25)) { thinkExpanded.toggle() }
+                withAnimation(.easeInOut(duration: 0.25)) { viewModel.toggleThinking(id: msg.id) }
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "brain.head.profile")
                         .font(.system(size: 18)).foregroundColor(UIConstants.orange)
-                    Text(thinkExpanded ? "正在处理..." : "处理完成（\(count)步）")
+                    Text(msg.content.isEmpty ? "正在处理..." : msg.content)
                         .font(.system(size: 14, weight: .semibold)).foregroundColor(UIConstants.orange)
+                        .lineLimit(1)
                     Spacer()
-                    CapsuleBadge(text: "\(count)步", color: UIConstants.orange.opacity(0.14), foregroundColor: UIConstants.orange)
+                    if count > 0 {
+                        CapsuleBadge(text: "\(count)步", color: UIConstants.orange.opacity(0.14), foregroundColor: UIConstants.orange)
+                    }
                     Image(systemName: "chevron.down")
                         .font(.system(size: 12, weight: .medium)).foregroundColor(UIConstants.orange)
-                        .rotationEffect(.degrees(thinkExpanded ? 180 : 0))
+                        .rotationEffect(.degrees(expanded ? 180 : 0))
                 }
                 .padding(12)
             }
             .buttonStyle(.plain)
 
-            if thinkExpanded {
+            if expanded {
                 VStack(alignment: .leading, spacing: 6) {
+                    if !msg.liveText.isEmpty {
+                        Text(msg.liveText)
+                            .font(.system(size: 12))
+                            .foregroundColor(UIConstants.orange.opacity(0.85))
+                            .lineSpacing(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                     ForEach(Array(steps.enumerated()), id: \.offset) { i, s in
                         HStack(alignment: .top, spacing: 7) {
                             if i == steps.count - 1 {
@@ -290,7 +311,7 @@ struct ChatView: View {
                 .padding(12)
             }
         }
-        .frame(maxWidth: 288)
+        .frame(maxWidth: 288, alignment: .leading)
         .background(Color(red: 1, green: 0.980, blue: 0.961))
         .overlay(RoundedRectangle(cornerRadius: 14).stroke(UIConstants.orange.opacity(0.22), lineWidth: 1))
         .clipShape(RoundedRectangle(cornerRadius: 14))

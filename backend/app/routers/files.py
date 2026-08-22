@@ -22,9 +22,12 @@ async def get_file(file_id: str):
 
 @router.post("", response_model=FileResponse)
 async def create_file(body: FileCreate):
-    """创建文件。"""
+    """创建文件（普通笔记或日程）。日程属性通过 schedule JSON 传入。"""
     try:
-        return await crud.create_file(body.name, body.content, body.parent_id)
+        return await crud.create_file(
+            body.name, body.content, body.parent_id,
+            file_type=body.type, schedule=body.schedule,
+        )
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
 

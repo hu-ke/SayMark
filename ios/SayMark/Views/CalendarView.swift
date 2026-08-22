@@ -216,7 +216,7 @@ struct CalendarView: View {
     // MARK: - Event Row
     private func eventRow(event: CalendarEvent) -> some View {
         NavigationLink {
-            FileDetailView(fileId: event.id, fileName: event.title)
+            FileDetailView(fileId: event.id, fileName: event.title, folderTreeViewModel: treeViewModel)
         } label: {
             HStack(alignment: .top, spacing: 12) {
                 RoundedRectangle(cornerRadius: 2)

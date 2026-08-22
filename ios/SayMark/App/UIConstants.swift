@@ -6,6 +6,8 @@ enum UIConstants {
     static let orange     = Color(red: 1.000, green: 0.584, blue: 0.000)    // #FF9500
     static let red        = Color(red: 1.000, green: 0.231, blue: 0.188)    // #FF3B30
     static let green      = Color(red: 0.204, green: 0.780, blue: 0.349)    // #34C759
+    static let purple     = Color(red: 0.686, green: 0.322, blue: 0.871)    // #AF52DE
+    static let teal       = Color(red: 0.353, green: 0.784, blue: 0.980)    // #5AC8FA
     static let background = Color(red: 0.949, green: 0.949, blue: 0.969)    // #F2F2F7
     static let card       = Color.white
     static let label      = Color.black
@@ -30,6 +32,7 @@ enum UIConstants {
 // MARK: - TabBar
 struct SayMarkTabBar: View {
     @Binding var selectedTab: Int
+    var showMic: Bool = true
     var onRecordStart: () -> Void = {}
     var onRecordChanged: ((RecZone) -> Void)? = nil
     var onRecordEnd: ((RecZone) -> Void)? = nil
@@ -65,54 +68,56 @@ struct SayMarkTabBar: View {
                 .frame(maxHeight: .infinity, alignment: .top)
             }
 
-            // 居中突出的话筒 FAB（长按录音 + 拖拽切区）
-            ZStack {
-                Circle()
-                    .fill(currentZone == .cancel ? UIConstants.red :
-                           currentZone == .text ? UIConstants.green : UIConstants.blue)
-                    .frame(width: 56, height: 56)
-                    .shadow(color: (currentZone == .cancel ? UIConstants.red :
-                                     currentZone == .text ? UIConstants.green : UIConstants.blue).opacity(0.45), radius: 10, y: 4)
-                Image(systemName: "mic.fill")
-                    .font(.system(size: 28))
-                    .foregroundColor(.white)
-            }
-            .offset(y: -28)
-            .frame(maxWidth: .infinity)
-            .gesture(
-                LongPressGesture(minimumDuration: 0.5)
-                    .sequenced(before: DragGesture(minimumDistance: 0))
-                    .onChanged { value in
-                        switch value {
-                        case .second(true, let drag):
-                            if !isRecording {
-                                isRecording = true
-                                currentZone = .normal
-                                onRecordStart()
-                            }
-                            if let drag = drag {
-                                let h = drag.translation.height
-                                let w = drag.translation.width
-                                if h < -30 && w < -30 {
-                                    updateZone(.cancel)
-                                } else if h < -30 && w > 30 {
-                                    updateZone(.text)
-                                } else {
-                                    updateZone(.normal)
+            // 居中突出的话筒 FAB（长按录音 + 拖拽切区；详情页时隐藏，避免与笔记内话筒歧义）
+            if showMic {
+                ZStack {
+                    Circle()
+                        .fill(currentZone == .cancel ? UIConstants.red :
+                               currentZone == .text ? UIConstants.green : UIConstants.blue)
+                        .frame(width: 56, height: 56)
+                        .shadow(color: (currentZone == .cancel ? UIConstants.red :
+                                         currentZone == .text ? UIConstants.green : UIConstants.blue).opacity(0.45), radius: 10, y: 4)
+                    Image(systemName: "mic.fill")
+                        .font(.system(size: 28))
+                        .foregroundColor(.white)
+                }
+                .offset(y: -28)
+                .frame(maxWidth: .infinity)
+                .gesture(
+                    LongPressGesture(minimumDuration: 0.5)
+                        .sequenced(before: DragGesture(minimumDistance: 0))
+                        .onChanged { value in
+                            switch value {
+                            case .second(true, let drag):
+                                if !isRecording {
+                                    isRecording = true
+                                    currentZone = .normal
+                                    onRecordStart()
                                 }
+                                if let drag = drag {
+                                    let h = drag.translation.height
+                                    let w = drag.translation.width
+                                    if h < -30 && w < -30 {
+                                        updateZone(.cancel)
+                                    } else if h < -30 && w > 30 {
+                                        updateZone(.text)
+                                    } else {
+                                        updateZone(.normal)
+                                    }
+                                }
+                            default:
+                                break
                             }
-                        default:
-                            break
                         }
-                    }
-                    .onEnded { _ in
-                        if isRecording {
-                            isRecording = false
-                            onRecordEnd?(currentZone)
-                            currentZone = .normal
+                        .onEnded { _ in
+                            if isRecording {
+                                isRecording = false
+                                onRecordEnd?(currentZone)
+                                currentZone = .normal
+                            }
                         }
-                    }
-            )
+                )
+            }
         }
         .frame(height: 83)
         .background(

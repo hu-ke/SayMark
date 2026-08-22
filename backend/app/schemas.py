@@ -24,6 +24,8 @@ class FileCreate(BaseModel):
     name: str
     content: str
     parent_id: str
+    type: str = "note"  # "note" 或 "event"
+    schedule: Optional[dict] = None  # 日程属性 JSON：{"date","time","repeat"}
 
 
 class FileUpdate(BaseModel):
@@ -33,6 +35,16 @@ class FileUpdate(BaseModel):
 
 class FileMove(BaseModel):
     target_folder_id: str
+
+
+class FolderMove(BaseModel):
+    target_folder_id: Optional[str] = None  # None 表示移动到顶级目录
+
+
+class ReorderRequest(BaseModel):
+    type: str        # "file" 或 "folder"
+    source_id: str
+    target_id: str
 
 
 class NoteCreate(BaseModel):
@@ -112,6 +124,7 @@ class FileMetaResponse(BaseModel):
     reminder_minutes: Optional[int] = None
     recurrence: Optional[str] = None  # null/""=一次性，"daily"/"weekly"/"monthly"
     recurrence_end_date: Optional[str] = None  # 周期结束日期
+    schedule: Optional[str] = None  # 日程属性 JSON 字符串
     created_at: str
     updated_at: str
 
@@ -129,6 +142,7 @@ class FileResponse(BaseModel):
     reminder_minutes: Optional[int] = None
     recurrence: Optional[str] = None
     recurrence_end_date: Optional[str] = None
+    schedule: Optional[str] = None  # 日程属性 JSON 字符串
     created_at: str
     updated_at: str
 
