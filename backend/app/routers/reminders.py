@@ -16,8 +16,8 @@ async def list_reminders():
 
 @router.patch("/{file_id}", response_model=FileResponse)
 async def cancel_reminder(file_id: str):
-    """取消某个日程的提醒（设为 0 即取消）。"""
-    updated = await crud.set_reminder(file_id, 0)
+    """取消某个日程的提醒。"""
+    updated = await crud.clear_reminder(file_id)
     if updated is None:
         raise HTTPException(404, "文件不存在")
     return updated

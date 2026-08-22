@@ -288,13 +288,6 @@ struct ChatView: View {
 
             if expanded {
                 VStack(alignment: .leading, spacing: 6) {
-                    if !msg.liveText.isEmpty {
-                        Text(msg.liveText)
-                            .font(.system(size: 12))
-                            .foregroundColor(UIConstants.orange.opacity(0.85))
-                            .lineSpacing(2)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
                     ForEach(Array(steps.enumerated()), id: \.offset) { i, s in
                         HStack(alignment: .top, spacing: 7) {
                             if i == steps.count - 1 {
@@ -311,6 +304,13 @@ struct ChatView: View {
                                 .lineSpacing(2)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
+                    }
+                    if !msg.liveText.isEmpty {
+                        Text(msg.liveText)
+                            .font(.system(size: 12))
+                            .foregroundColor(UIConstants.orange.opacity(0.85))
+                            .lineSpacing(2)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 .padding(12)

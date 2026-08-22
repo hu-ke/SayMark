@@ -18,14 +18,23 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
     /// 请求通知权限
     func requestPermission() async -> Bool {
         do {
-            return try await center.requestAuthorization(options: [.alert, .sound, .badge])
+            let granted = try await center.requestAuthorization(options: [.alert, .sound, .badge])
+            print("[Notify] requestPermission -> \(granted)")
+            return granted
         } catch {
+            print("[Notify] requestPermission error: \(error)")
             return false
         }
     }
 
+    private func logAuthStatus() async {
+        let settings = await center.notificationSettings()
+        print("[Notify] authorizationStatus = \(settings.authorizationStatus.rawValue)")
+    }
+
     /// 根据提醒列表调度所有本地通知
     func scheduleNotifications(from reminders: [NoteFile]) async {
+        print("[Notify] scheduleNotifications: \(reminders.count) 条提醒")
         center.removeAllPendingNotificationRequests()
 
         let formatter = DateFormatter()
@@ -33,15 +42,28 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         dateOnlyFmt.dateFormat = "yyyy-MM-dd"
 
         for item in reminders {
-            guard let minutes = item.reminderMinutes, minutes > 0 else { continue }
-            guard !item.date.isEmpty else { continue }
+            guard let minutes = item.reminderMinutes else {
+                print("[Notify] 跳过「\(item.name)」：无 reminderMinutes")
+                continue
+            }
+            guard !item.date.isEmpty else {
+                print("[Notify] 跳过「\(item.name)」：date 为空")
+                continue
+            }
 
-            let dateStr = item.date + (item.time.isEmpty ? "T00:00" : "T\(item.time)")
+            // 后端 time 可能是 "HH:mm:ss"，截取为 "HH:mm" 再解析
+            let timeStr = item.time.count >= 5 ? String(item.time.prefix(5)) : item.time
+            let dateStr = item.date + (timeStr.isEmpty ? "T00:00" : "T\(timeStr)")
             formatter.dateFormat = "yyyy-MM-dd'T'HH:mm"
-            guard let eventDate = formatter.date(from: dateStr) else { continue }
+            guard let eventDate = formatter.date(from: dateStr) else {
+                print("[Notify] 跳过「\(item.name)」：无法解析 date=\(item.date) time=\(item.time)")
+                continue
+            }
 
             let triggerDate = eventDate.addingTimeInterval(-Double(minutes) * 60)
             let body = bodyPreview(from: item)
+            let advanceDesc = minutes > 0 ? "提前\(minutes)分钟" : "到点"
+            print("[Notify] 「\(item.name)」事件=\(dateStr) \(advanceDesc) 触发=\(triggerDate)")
 
             var endDate: Date? = nil
             if !item.recurrenceEndDate.isEmpty {
@@ -57,6 +79,8 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
                 if rc.isEmpty {
                     if triggerDate.timeIntervalSinceNow > 0 {
                         schedule(id: item.id, title: item.name, body: body, at: triggerDate)
+                    } else {
+                        print("[Notify] 「\(item.name)」触发时间已过，不调度")
                     }
                 } else {
                     scheduleSeries(id: item.id, title: item.name, body: body, first: triggerDate,
@@ -64,19 +88,37 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
                 }
             }
         }
+
+        let pending = await center.pendingNotificationRequests()
+        print("[Notify] 调度完成，当前待处理通知数 = \(pending.count)")
+        for req in pending {
+            if let trig = req.trigger as? UNCalendarNotificationTrigger {
+                let d = trig.nextTriggerDate() ?? Date()
+                print("[Notify]   已调度: \(req.identifier) → \(d)")
+            } else if let trig = req.trigger as? UNTimeIntervalNotificationTrigger {
+                print("[Notify]   已调度: \(req.identifier) → interval=\(trig.timeInterval)s")
+            }
+        }
     }
 
     /// 从后端拉取最新提醒并重新调度（供创建/编辑/删除日程后调用）
     func refreshFromServer() async {
         let settings = await center.notificationSettings()
+        print("[Notify] refreshFromServer authorizationStatus = \(settings.authorizationStatus.rawValue)")
         switch settings.authorizationStatus {
         case .authorized, .provisional, .ephemeral:
             break
         default:
+            print("[Notify] 未授权，停止调度")
             return
         }
-        guard let notes = try? await APIClient.shared.getReminderNotes() else { return }
-        await scheduleNotifications(from: notes)
+        do {
+            let notes = try await APIClient.shared.getReminderNotes()
+            print("[Notify] getReminderNotes 返回 \(notes.count) 条")
+            await scheduleNotifications(from: notes)
+        } catch {
+            print("[Notify] getReminderNotes 失败: \(error)")
+        }
     }
 
     /// 调度一系列周期性通知：从首次触发开始，按 step 推进，直到结束日期或上限

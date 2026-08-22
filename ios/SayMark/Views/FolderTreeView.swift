@@ -302,14 +302,9 @@ struct FolderCard: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // 文件夹标题行
+            // 文件夹标题行（含左滑删除）
             folderHeaderRow
                 .background(UIConstants.card)
-
-            // Swipe 操作
-            if swipedRow == node.id {
-                swipeActions(for: node.id, name: node.name, isFolder: true)
-            }
 
             // 展开的子内容
             if isExpanded {
@@ -349,127 +344,16 @@ struct FolderCard: View {
     }
 
     private var folderHeaderRow: some View {
-        Button {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                if isExpanded {
-                    expandedFolders.remove(node.id)
-                } else {
-                    expandedFolders.insert(node.id)
-                }
-                swipedRow = nil
-            }
-        } label: {
-            HStack(spacing: 12) {
-                RowIcon(
-                    iconType: "folder",
-                    color: UIConstants.folderColors[colorIndex % UIConstants.folderColors.count]
-                )
-                Text(node.name)
-                    .font(.system(size: 17, weight: .medium))
-                    .foregroundColor(UIConstants.label)
-                    .kerning(-0.41)
-                Spacer()
-                if !isExpanded {
-                    let count = node.files.count + node.children.reduce(0) { $0 + $1.files.count + $1.children.reduce(0) { $0 + $1.files.count } }
-                    Text("\(count)项")
-                        .font(.system(size: 13))
-                        .foregroundColor(UIConstants.label3)
-                }
-                Button {
-                    onAddTap?(node.id, node.name)
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(isAddMenuOpen ? .white : UIConstants.blue)
-                        .frame(width: 28, height: 28)
-                        .background(
-                            Circle()
-                                .fill(isAddMenuOpen ? UIConstants.blue : UIConstants.blue.opacity(0.1))
-                        )
-                }
-                .buttonStyle(.plain)
-                .anchorPreference(key: AddButtonAnchorKey.self, value: .bounds) { [node.id: $0] }
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(UIConstants.label3)
-                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
-                    .animation(.easeInOut(duration: 0.2), value: isExpanded)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 11)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 20)
-                .onEnded { value in
-                    let w = value.translation.width
-                    let h = value.translation.height
-                    if w < -30 && abs(w) > abs(h) {
-                        withAnimation(.easeInOut(duration: 0.25)) {
-                            swipedRow = node.id
-                        }
-                    }
-                }
-        )
-        .draggable(DragPayload.folder(node.id))
-        .dropDestination(for: String.self) { items, _ in
-            guard let payload = items.first else { return false }
-            Task { await viewModel.handleDrop(payload: payload, targetFolderId: node.id) }
-            return true
-        } isTargeted: { targeted in
-            withAnimation(.easeInOut(duration: 0.15)) {
-                isDropTargeted = targeted
-            }
-        }
-        .background(isDropTargeted ? UIConstants.blue.opacity(0.14) : Color.clear)
-    }
-
-    private func swipeActions(for id: String, name: String, isFolder: Bool) -> some View {
-        HStack(spacing: 0) {
-            Spacer()
-            Button {
-                deleteTargetId = id
-                deleteTargetName = name
-                deleteIsFolder = isFolder
+        ZStack(alignment: .trailing) {
+            // 删除按钮（左滑后露出，覆盖在行的右侧）
+            DeleteSwipeButton {
+                deleteTargetId = node.id
+                deleteTargetName = node.name
+                deleteIsFolder = true
                 showDeleteAlert = true
                 swipedRow = nil
-            } label: {
-                VStack(spacing: 3) {
-                    Image(systemName: "trash")
-                        .font(.system(size: 14))
-                    Text("删除")
-                        .font(.system(size: 12, weight: .semibold))
-                }
-                .foregroundColor(.white)
-                .frame(width: 72, height: 44)
-                .background(UIConstants.red)
             }
-        }
-        .transition(.move(edge: .trailing).combined(with: .opacity))
-    }
-}
-
-// MARK: - Sub Folder Row
-struct SubFolderRow: View {
-    let node: TreeNode
-    let colorIndex: Int
-    @Binding var expandedFolders: Set<String>
-    @Binding var swipedRow: String?
-    @ObservedObject var viewModel: FolderTreeViewModel
-    @Binding var showDeleteAlert: Bool
-    @Binding var deleteTargetId: String?
-    @Binding var deleteTargetName: String?
-    @Binding var deleteIsFolder: Bool
-    var isAddMenuOpen: Bool = false
-    var onAddTap: ((String, String) -> Void)? = nil
-
-    @State private var isDropTargeted = false
-    var isExpanded: Bool { expandedFolders.contains(node.id) }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            Divider()
+            .opacity(swipedRow == node.id ? 1 : 0)
 
             Button {
                 withAnimation(.easeInOut(duration: 0.2)) {
@@ -482,14 +366,18 @@ struct SubFolderRow: View {
                 }
             } label: {
                 HStack(spacing: 12) {
-                    RowIcon(iconType: "folder", color: UIConstants.folderColors[colorIndex % UIConstants.folderColors.count])
+                    RowIcon(
+                        iconType: "folder",
+                        color: UIConstants.folderColors[colorIndex % UIConstants.folderColors.count]
+                    )
                     Text(node.name)
                         .font(.system(size: 17, weight: .medium))
                         .foregroundColor(UIConstants.label)
                         .kerning(-0.41)
                     Spacer()
                     if !isExpanded {
-                        Text("\(node.files.count)项")
+                        let count = node.files.count + node.children.reduce(0) { $0 + $1.files.count + $1.children.reduce(0) { $0 + $1.files.count } }
+                        Text("\(count)项")
                             .font(.system(size: 13))
                             .foregroundColor(UIConstants.label3)
                     }
@@ -518,6 +406,8 @@ struct SubFolderRow: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .background(UIConstants.card)
+            .offset(x: swipedRow == node.id ? -72 : 0)
             .simultaneousGesture(
                 DragGesture(minimumDistance: 20)
                     .onEnded { value in
@@ -541,27 +431,117 @@ struct SubFolderRow: View {
                 }
             }
             .background(isDropTargeted ? UIConstants.blue.opacity(0.14) : Color.clear)
+        }
+        .frame(minHeight: 44)
+    }
+}
 
-            if swipedRow == node.id {
-                HStack(spacing: 0) {
-                    Spacer()
-                    Button {
-                        deleteTargetId = node.id
-                        deleteTargetName = node.name
-                        deleteIsFolder = true
-                        showDeleteAlert = true
-                        swipedRow = nil
-                    } label: {
-                        VStack(spacing: 3) {
-                            Image(systemName: "trash").font(.system(size: 14))
-                            Text("删除").font(.system(size: 12, weight: .semibold))
+// MARK: - Sub Folder Row
+struct SubFolderRow: View {
+    let node: TreeNode
+    let colorIndex: Int
+    @Binding var expandedFolders: Set<String>
+    @Binding var swipedRow: String?
+    @ObservedObject var viewModel: FolderTreeViewModel
+    @Binding var showDeleteAlert: Bool
+    @Binding var deleteTargetId: String?
+    @Binding var deleteTargetName: String?
+    @Binding var deleteIsFolder: Bool
+    var isAddMenuOpen: Bool = false
+    var onAddTap: ((String, String) -> Void)? = nil
+
+    @State private var isDropTargeted = false
+    var isExpanded: Bool { expandedFolders.contains(node.id) }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Divider()
+
+            ZStack(alignment: .trailing) {
+                // 删除按钮（左滑后露出，覆盖在行的右侧）
+                DeleteSwipeButton {
+                    deleteTargetId = node.id
+                    deleteTargetName = node.name
+                    deleteIsFolder = true
+                    showDeleteAlert = true
+                    swipedRow = nil
+                }
+                .opacity(swipedRow == node.id ? 1 : 0)
+
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        if isExpanded {
+                            expandedFolders.remove(node.id)
+                        } else {
+                            expandedFolders.insert(node.id)
                         }
-                        .foregroundColor(.white)
-                        .frame(width: 72, height: 44)
-                        .background(UIConstants.red)
+                        swipedRow = nil
+                    }
+                } label: {
+                    HStack(spacing: 12) {
+                        RowIcon(iconType: "folder", color: UIConstants.folderColors[colorIndex % UIConstants.folderColors.count])
+                        Text(node.name)
+                            .font(.system(size: 17, weight: .medium))
+                            .foregroundColor(UIConstants.label)
+                            .kerning(-0.41)
+                        Spacer()
+                        if !isExpanded {
+                            Text("\(node.files.count)项")
+                                .font(.system(size: 13))
+                                .foregroundColor(UIConstants.label3)
+                        }
+                        Button {
+                            onAddTap?(node.id, node.name)
+                        } label: {
+                            Image(systemName: "plus")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(isAddMenuOpen ? .white : UIConstants.blue)
+                                .frame(width: 28, height: 28)
+                                .background(
+                                    Circle()
+                                        .fill(isAddMenuOpen ? UIConstants.blue : UIConstants.blue.opacity(0.1))
+                                )
+                        }
+                        .buttonStyle(.plain)
+                        .anchorPreference(key: AddButtonAnchorKey.self, value: .bounds) { [node.id: $0] }
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(UIConstants.label3)
+                            .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                            .animation(.easeInOut(duration: 0.2), value: isExpanded)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 11)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .background(UIConstants.card)
+                .offset(x: swipedRow == node.id ? -72 : 0)
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 20)
+                        .onEnded { value in
+                            let w = value.translation.width
+                            let h = value.translation.height
+                            if w < -30 && abs(w) > abs(h) {
+                                withAnimation(.easeInOut(duration: 0.25)) {
+                                    swipedRow = node.id
+                                }
+                            }
+                        }
+                )
+                .draggable(DragPayload.folder(node.id))
+                .dropDestination(for: String.self) { items, _ in
+                    guard let payload = items.first else { return false }
+                    Task { await viewModel.handleDrop(payload: payload, targetFolderId: node.id) }
+                    return true
+                } isTargeted: { targeted in
+                    withAnimation(.easeInOut(duration: 0.15)) {
+                        isDropTargeted = targeted
                     }
                 }
+                .background(isDropTargeted ? UIConstants.blue.opacity(0.14) : Color.clear)
             }
+            .frame(minHeight: 44)
 
             if isExpanded {
                 Divider()
@@ -584,6 +564,24 @@ struct SubFolderRow: View {
     }
 }
 
+// MARK: - Delete Swipe Button
+struct DeleteSwipeButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 3) {
+                Image(systemName: "trash").font(.system(size: 14))
+                Text("删除").font(.system(size: 12, weight: .semibold))
+            }
+            .foregroundColor(.white)
+            .frame(width: 72, height: 44)
+            .background(UIConstants.red)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 // MARK: - File Row Card
 struct FileRowCard: View {
     let file: NoteFile
@@ -596,96 +594,103 @@ struct FileRowCard: View {
     @Binding var deleteIsFolder: Bool
 
     @State private var isDropTargeted = false
+    @State private var navigate = false
 
     var body: some View {
         VStack(spacing: 0) {
             Divider()
 
-            NavigationLink {
-                FileDetailView(fileId: file.id, fileName: file.name, folderTreeViewModel: viewModel)
-            } label: {
-                HStack(spacing: 12) {
-                    RowIcon(
-                        iconType: file.isEvent ? "cal" : "doc",
-                        color: file.isEvent ? UIConstants.orange : UIConstants.label3
-                    )
-                    VStack(alignment: .leading, spacing: 3) {
-                        HStack(spacing: 6) {
-                            Text(file.name)
-                                .font(.system(size: 17))
-                                .foregroundColor(UIConstants.label)
-                                .kerning(-0.41)
-                                .lineLimit(1)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                            if file.isEvent {
-                                CapsuleBadge(text: "日程")
-                            }
-                            if file.isEvent && file.isRecurring {
-                                CapsuleBadge(text: "重复", color: Color(red: 0.686, green: 0.322, blue: 0.871))
-                            }
-                        }
-                        Text(formatTime(file.createdAt))
-                            .font(.system(size: 13))
-                            .foregroundColor(UIConstants.label3)
-                            .kerning(-0.08)
-                    }
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 14))
-                        .foregroundColor(UIConstants.label3)
+            ZStack(alignment: .trailing) {
+                // 删除按钮（左滑后露出，覆盖在行的右侧）
+                DeleteSwipeButton {
+                    deleteTargetId = file.id
+                    deleteTargetName = file.name
+                    deleteIsFolder = false
+                    showDeleteAlert = true
+                    swipedRow = nil
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 11)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .draggable(DragPayload.file(file.id))
-            .simultaneousGesture(
-                DragGesture(minimumDistance: 20)
-                    .onEnded { value in
-                        let w = value.translation.width
-                        let h = value.translation.height
-                        if w < -30 && abs(w) > abs(h) {
-                            withAnimation(.easeInOut(duration: 0.25)) {
-                                swipedRow = file.id
-                            }
-                        }
-                    }
-            )
-            .dropDestination(for: String.self) { items, _ in
-                guard let payload = items.first else { return false }
-                Task { await viewModel.handleFileSwap(payload: payload, targetId: file.id) }
-                return true
-            } isTargeted: { targeted in
-                withAnimation(.easeInOut(duration: 0.15)) {
-                    isDropTargeted = targeted
-                }
-            }
-            .background(isDropTargeted ? UIConstants.orange.opacity(0.14) : Color.clear)
+                .opacity(isSwiped ? 1 : 0)
 
-            if isSwiped {
-                HStack(spacing: 0) {
-                    Spacer()
-                    Button {
-                        deleteTargetId = file.id
-                        deleteTargetName = file.name
-                        deleteIsFolder = false
-                        showDeleteAlert = true
-                        swipedRow = nil
-                    } label: {
-                        VStack(spacing: 3) {
-                            Image(systemName: "trash").font(.system(size: 13))
-                            Text("删除").font(.system(size: 12, weight: .semibold))
+                // 行内容：点击进入详情
+                Button {
+                    swipedRow = nil
+                    navigate = true
+                } label: {
+                    rowContent
+                }
+                .buttonStyle(.plain)
+                .background(UIConstants.card)
+                .offset(x: isSwiped ? -72 : 0)
+                .draggable(DragPayload.file(file.id))
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 20)
+                        .onEnded { value in
+                            let w = value.translation.width
+                            let h = value.translation.height
+                            if w < -30 && abs(w) > abs(h) {
+                                withAnimation(.easeInOut(duration: 0.25)) {
+                                    swipedRow = file.id
+                                }
+                            }
                         }
-                        .foregroundColor(.white)
-                        .frame(width: 72, height: 44)
-                        .background(UIConstants.red)
+                )
+                .dropDestination(for: String.self) { items, _ in
+                    guard let payload = items.first else { return false }
+                    Task { await viewModel.handleFileSwap(payload: payload, targetId: file.id) }
+                    return true
+                } isTargeted: { targeted in
+                    withAnimation(.easeInOut(duration: 0.15)) {
+                        isDropTargeted = targeted
                     }
                 }
-                .transition(.move(edge: .trailing).combined(with: .opacity))
+                .background(isDropTargeted ? UIConstants.orange.opacity(0.14) : Color.clear)
             }
+            .frame(minHeight: 44)
+
+            // 隐藏导航链接（与点击手势解耦，避免左滑误触发导航）
+            NavigationLink(
+                destination: FileDetailView(fileId: file.id, fileName: file.name, folderTreeViewModel: viewModel),
+                isActive: $navigate
+            ) { EmptyView() }
+            .hidden()
         }
         .background(UIConstants.card)
+    }
+
+    private var rowContent: some View {
+        HStack(spacing: 12) {
+            RowIcon(
+                iconType: file.isEvent ? "cal" : "doc",
+                color: file.isEvent ? UIConstants.orange : UIConstants.label3
+            )
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    Text(file.name)
+                        .font(.system(size: 17))
+                        .foregroundColor(UIConstants.label)
+                        .kerning(-0.41)
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    if file.isEvent {
+                        CapsuleBadge(text: "日程")
+                    }
+                    if file.isEvent && file.isRecurring {
+                        CapsuleBadge(text: "重复", color: Color(red: 0.686, green: 0.322, blue: 0.871))
+                    }
+                }
+                Text(formatTime(file.createdAt))
+                    .font(.system(size: 13))
+                    .foregroundColor(UIConstants.label3)
+                    .kerning(-0.08)
+            }
+            Spacer()
+            Image(systemName: "chevron.right")
+                .font(.system(size: 14))
+                .foregroundColor(UIConstants.label3)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 11)
+        .contentShape(Rectangle())
     }
 
     private func formatTime(_ time: String) -> String {

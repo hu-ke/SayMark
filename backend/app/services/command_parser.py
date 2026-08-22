@@ -29,7 +29,8 @@ _SYSTEM_PROMPT_TEMPLATE = (
     "- create_note: 新建笔记（无明确时间/日期的备忘）。参数 content(备忘原文), target_folder_id?(可选目录 id；缺省「未分类」), target_folder?(用户提到的目录名，兜底用)。重要：content 只做优化和结构化（修正错别字、整理格式），绝对不要添加用户没说的内容、不要润色扩展、不要添油加醋。\n"
     "- create_event: 新建日程（有明确时间/日期的安排）。参数 title(日程标题), date(日期 YYYY-MM-DD), time(时间 HH:MM，缺省空), content(日程详情), target_folder_id?(可选目录 id), target_folder?(用户提到的目录名，兜底用)。当用户说「安排/预定/约了/XX点XX分/下周一/明天/X月X号」并且涉及具体时间点时用此 action\n"
     "- append_note: 补充/追加内容到已有笔记或日程。参数 target_id(要补充的文件 id), name(用户提到的文件名，兜底用), content(要补充的新内容)。当用户说「补充/加上/添加到XX」时用此 action\n"
-    "- set_reminder: 为日程设置提醒。参数 target_id(日程文件 id), name(日程名称，兜底用), minutes(提前多少分钟提醒，0=取消提醒), recurrence(周期：空=一次性, daily=每天, weekly=每周, monthly=每月), recurrence_end_date(周期结束日期 YYYY-MM-DD，如「到10月第一周」需换算为该周周一的日期)。当用户说「提前XX分钟提醒」「每天提醒」「每周X提醒」「到X月X号为止」时用此 action\n"
+    "- set_reminder: 为日程设置提醒。参数 target_id(日程文件 id), name(日程名称，兜底用), minutes(提前多少分钟提醒，0=到点提醒即在日程开始时刻提醒), recurrence(周期：空=一次性, daily=每天, weekly=每周, monthly=每月), recurrence_end_date(周期结束日期 YYYY-MM-DD，如「到10月第一周」需换算为该周周一的日期)。当用户说「提前XX分钟提醒」「每天提醒」「每周X提醒」「到X月X号为止」时用此 action\n"
+    "- cancel_reminder: 取消日程的提醒。参数 target_id(日程文件 id), name(日程名称，兜底用)。当用户说「取消提醒」「不要提醒了」时用此 action\n"
     "- update_schedule: 修改已有日程的时间/日期/提醒/重复属性。参数 target_id(日程文件 id), name(日程名称兜底用), date?(YYYY-MM-DD), time?(HH:MM), reminder_minutes?(提前提醒分钟数，0=取消提醒), repeat_enabled?(是否重复 true/false), repeat_unit?(重复单位 seconds/minutes/hours/days), repeat_value?(重复值数字)。当用户在编辑日程时说「改成XX点」「提前XX分钟」「每小时/每X分钟/每天重复」「取消重复」时用此 action；只有修改正文内容时才用 append_note。\n"
     "- save_place: 保存用户提到的地点到个人地名库。参数 name(地名), lat(纬度数字), lon(经度数字)。当用户说「我在XX」「我家在XX」且你想记住这个地点时用此 action。注意：地名不知道坐标的话凭知识估算大致坐标。\n"
     "- create_folder: 创建文件夹。参数 name, parent_folder_id?(可选父目录 id，缺省顶级), parent_folder?(用户提到的父目录名，兜底用)\n"
@@ -60,6 +61,7 @@ _SYSTEM_PROMPT_TEMPLATE = (
     "- 「下下周X」：参考下方「日期参考」表格中「下下周X」对应的日期直接填入。\n"
     "- 「上/昨/前」同理反向推算\n"
     "- 「X月X号/X月X日」直接取该日期，年份取当前年份（如果该日期已过，取明年）\n"
+    "- 「X分钟后/X小时后/X秒后」= 当前时间 + X（这是倒计时，不是具体钟点）：date=今天，time=换算出的 HH:MM。\n"
     "- 如果有具体时间（如「下午2点」），填入 time 字段（24小时制 HH:MM）\n"
     "- 计算得出的 date 必须填入 YYYY-MM-DD 格式，不要算错！\n"
     "5. **补充/跟进已有事项**：当用户对刚刚讨论或创建的事项补充信息时（如「提前30分钟和我说」「地点是XX」「备注一下」），必须在目录树中找到该事项（按名称语义匹配），用 append_note 补充内容或用 set_reminder 设置提醒，**不要**新建！判断标准：用户没有新的时间点关键词（下周一、明天等），且提到的是已经存在的东西，就应该是补充而非新建。\n"
@@ -75,6 +77,7 @@ _SYSTEM_PROMPT_TEMPLATE = (
     "   步骤2: set_reminder(name=网课, minutes=3, recurrence=daily/weekly/... , recurrence_end_date=如有结束日期则填)\n"
     "   对于没有具体日期的周期日程（如「每天…」），date 填今天（YYYY-MM-DD）。步骤2 的 target_id 留空，用 name 引用步骤1 创建的名称。\n"
     "   判断标准：目录树中不存在同名日程 + 用户提到了提醒相关词（通知/提醒/和我说/提前），就必须用 create_event + set_reminder 两步！\n"
+    "   **倒计时提醒**：若用户说「X分钟后/X小时后提醒我做Y」（相对现在，无具体钟点），则 time=当前时间+X（换算成 HH:MM），set_reminder 的 minutes=0（到点提醒，不是取消！）。例如「3分钟后提醒我出门遛狗」→ create_event(title=遛狗, date=今天, time=当前+3分钟) + set_reminder(name=遛狗, minutes=0)。只有用户明确说「提前X分钟」时才用 minutes=X。\n"
     "14. **主题查询**：当用户说「购物相关的」「关于XX的笔记」等描述性查询时，请查看上面「匹配结果」中的记录——那就是数据库中实际匹配到的笔记/日程。直接操作这些记录，不要说无法筛选或缺少分类系统。如果匹配结果为空，返回空的 steps 即可。\n"
     "15. 只输出 JSON 对象，不要 markdown 代码块，不要解释。"
 )
@@ -318,7 +321,7 @@ async def parse_command(text: str, target_file_id: str | None = None) -> dict:
         json.JSONDecodeError: 模型输出无法解析为 JSON 时抛出。
     """
     inventory = await _build_inventory()
-    now = datetime.now().strftime("%Y-%m-%d（周%u）")
+    now = datetime.now().strftime("%Y-%m-%d %H:%M（周%u）")
 
     # 如果有目标文件，注入目标文件上下文
     target_context = ""
@@ -365,7 +368,7 @@ async def build_agent_context(text: str, target_file_id: str | None = None) -> s
     供 chat_stream 的 agent 循环使用，让 LLM 在迭代决策中始终看到最新的上下文。
     """
     inventory = await _build_inventory()
-    now = datetime.now().strftime("%Y-%m-%d（周%u）")
+    now = datetime.now().strftime("%Y-%m-%d %H:%M（周%u）")
     date_ref = _build_date_reference()
 
     target_context = ""

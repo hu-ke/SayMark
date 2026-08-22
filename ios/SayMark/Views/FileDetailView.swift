@@ -831,8 +831,8 @@ struct EventScheduleCard: View {
     }
 
     private var reminderText: String {
-        if let m = note.reminderMinutes, m > 0 {
-            return "提前 \(m) 分钟"
+        if let m = note.reminderMinutes {
+            return m > 0 ? "提前 \(m) 分钟" : "到点提醒"
         }
         return "无"
     }

@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct RemindersView: View {
-    @StateObject private var viewModel = RemindersViewModel()
+    @ObservedObject var viewModel: RemindersViewModel
     @State private var showDeleteAlert = false
     @State private var deleteReminderId: String?
 
@@ -113,14 +113,27 @@ struct RemindersView: View {
                                 }
 
                                 if reminder.hasReminder, let minutes = reminder.reminderMinutes {
-                                    Text("提前\(formatMinutes(minutes))")
-                                        .font(.system(size: 12, weight: .semibold))
-                                        .foregroundColor(UIConstants.orange)
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 3)
-                                        .background(UIConstants.orange.opacity(0.12))
-                                        .clipShape(Capsule())
-                                        .padding(.top, 2)
+                                    HStack(spacing: 6) {
+                                        Text(minutes > 0 ? "提前\(formatMinutes(minutes))" : "到点提醒")
+                                            .font(.system(size: 12, weight: .semibold))
+                                            .foregroundColor(UIConstants.orange)
+                                            .padding(.horizontal, 8)
+                                            .padding(.vertical, 3)
+                                            .background(UIConstants.orange.opacity(0.12))
+                                            .clipShape(Capsule())
+
+                                        TimelineView(.periodic(from: .now, by: 60)) { context in
+                                            let color = remainingColor(for: reminder, now: context.date)
+                                            Text(remainingText(for: reminder, now: context.date))
+                                                .font(.system(size: 12, weight: .semibold))
+                                                .foregroundColor(color)
+                                                .padding(.horizontal, 8)
+                                                .padding(.vertical, 3)
+                                                .background(color.opacity(0.12))
+                                                .clipShape(Capsule())
+                                        }
+                                    }
+                                    .padding(.top, 2)
                                 }
                             }
 
@@ -159,19 +172,43 @@ struct RemindersView: View {
     }
 
     // MARK: - Helpers
-    private func formatReminderTime(_ reminder: NoteFile) -> String {
+    private func eventDate(of reminder: NoteFile) -> Date? {
         let timeStr = reminder.time.count >= 5 ? String(reminder.time.prefix(5)) : reminder.time
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_US_POSIX")
         f.dateFormat = "yyyy-MM-dd HH:mm"
-        guard !reminder.date.isEmpty, !timeStr.isEmpty,
-              let d = f.date(from: "\(reminder.date) \(timeStr)") else {
-            return reminder.date
-        }
+        guard !reminder.date.isEmpty, !timeStr.isEmpty else { return nil }
+        return f.date(from: "\(reminder.date) \(timeStr)")
+    }
+
+    private func formatReminderTime(_ reminder: NoteFile) -> String {
+        guard let d = eventDate(of: reminder) else { return reminder.date }
         let out = DateFormatter()
         out.locale = Locale(identifier: "zh_CN")
         out.dateFormat = "M月d日 HH:mm"
         return out.string(from: d)
+    }
+
+    private func remainingText(for reminder: NoteFile, now: Date) -> String {
+        guard let eventDate = eventDate(of: reminder) else { return "" }
+        let secs = eventDate.timeIntervalSince(now)
+        if secs <= 0 { return "已开始" }
+        if secs < 60 { return "不到1分钟" }
+        let totalMinutes = Int(secs / 60)
+        let days = totalMinutes / (24 * 60)
+        let hours = (totalMinutes % (24 * 60)) / 60
+        let minutes = totalMinutes % 60
+        if days > 0 { return "\(days)天" }
+        if hours > 0 { return "\(hours)小时" }
+        return "\(max(minutes, 1))分钟"
+    }
+
+    private func remainingColor(for reminder: NoteFile, now: Date) -> Color {
+        guard let eventDate = eventDate(of: reminder) else { return UIConstants.label3 }
+        let secs = eventDate.timeIntervalSince(now)
+        if secs <= 0 { return UIConstants.label3 }
+        if secs < 60 { return UIConstants.orange }
+        return UIConstants.blue
     }
 
     private func formatMinutes(_ minutes: Int) -> String {

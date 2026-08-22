@@ -329,19 +329,27 @@ async def delete_file(file_id: int) -> bool:
 
 
 async def set_reminder(file_id: int, minutes: int, recurrence: str = "", recurrence_end_date: str = "") -> dict | None:
+    """设置提醒。minutes >= 0：0 表示到点提醒（日程开始时刻），>0 表示提前 minutes 分钟。"""
     file_id = int(file_id)
     now = _now()
     end_date_obj = datetime.strptime(recurrence_end_date, "%Y-%m-%d").date() if recurrence_end_date else None
-    if minutes > 0:
-        r = await pg_db.execute(
-            "UPDATE files SET reminder_minutes=$1, recurrence=NULLIF($2,''), recurrence_end_date=$3, updated_at=$4 WHERE id=$5",
-            minutes, recurrence or None, end_date_obj, now, file_id,
-        )
-    else:
-        r = await pg_db.execute(
-            "UPDATE files SET reminder_minutes=NULL, recurrence=NULL, recurrence_end_date=NULL, updated_at=$1 WHERE id=$2",
-            now, file_id,
-        )
+    r = await pg_db.execute(
+        "UPDATE files SET reminder_minutes=$1, recurrence=NULLIF($2,''), recurrence_end_date=$3, updated_at=$4 WHERE id=$5",
+        minutes, recurrence or None, end_date_obj, now, file_id,
+    )
+    if r.endswith("0"):
+        return None
+    return await get_file(file_id)
+
+
+async def clear_reminder(file_id: int) -> dict | None:
+    """取消提醒（将提醒字段置空）。"""
+    file_id = int(file_id)
+    now = _now()
+    r = await pg_db.execute(
+        "UPDATE files SET reminder_minutes=NULL, recurrence=NULL, recurrence_end_date=NULL, updated_at=$1 WHERE id=$2",
+        now, file_id,
+    )
     if r.endswith("0"):
         return None
     return await get_file(file_id)
@@ -654,5 +662,5 @@ async def find_files_with_reminders() -> list[dict]:
     """列出所有有提醒的文件。"""
     return await pg_db.fetch(
         'SELECT id, name, content, parent_id, type, date, "time", reminder_minutes, recurrence, recurrence_end_date, created_at, updated_at'
-        f"{_schedule_col()} FROM files WHERE reminder_minutes IS NOT NULL AND reminder_minutes > 0 ORDER BY date"
+        f"{_schedule_col()} FROM files WHERE reminder_minutes IS NOT NULL ORDER BY date"
     )

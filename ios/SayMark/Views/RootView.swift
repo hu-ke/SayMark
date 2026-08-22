@@ -17,6 +17,7 @@ enum RecordingResult {
 struct RootView: View {
     @StateObject private var viewModel = FolderTreeViewModel()
     @StateObject private var chatViewModel = ChatViewModel()
+    @StateObject private var remindersViewModel = RemindersViewModel()
     @State private var locateFolderId: String?
     @State private var selectedTab = 0
 
@@ -48,7 +49,7 @@ struct RootView: View {
                     case 1:
                         CalendarView(treeViewModel: viewModel)
                     case 2:
-                        RemindersView()
+                        RemindersView(viewModel: remindersViewModel)
                     case 3:
                         SettingsView()
                     default:
@@ -109,11 +110,16 @@ struct RootView: View {
             // 每次切回「文件」列表页都刷新目录树，保证聊天/其它操作后的增删改及时可见
             if newTab == 0 {
                 Task { await viewModel.loadTree() }
+            } else if newTab == 2 {
+                // 切到「提醒」页时刷新，保证语音/其它操作新建的提醒即时可见
+                Task { await remindersViewModel.load() }
             }
         }
         .task {
             await viewModel.loadTree()
             LocationManager.shared.requestLocation()
+            // 预请求语音识别 + 麦克风权限，避免首次长按录音时被系统弹窗打断手势
+            _ = await speechRecognizer.requestAuthorization()
             Task {
                 for _ in 0..<30 {
                     if let lat = LocationManager.shared.latitude,
@@ -139,13 +145,12 @@ struct RootView: View {
 
     // MARK: - Recording
     private func startRecording() {
+        // 立即显示录音蒙层，录音在后台异步启动
+        withAnimation(.easeInOut(duration: 0.15)) {
+            recordingZone = .normal
+        }
         Task {
             await speechRecognizer.startRecording()
-            await MainActor.run {
-                withAnimation(.easeInOut(duration: 0.15)) {
-                    recordingZone = .normal
-                }
-            }
         }
     }
 
@@ -181,6 +186,8 @@ struct RootView: View {
         pendingMessage = nil
         // 关闭聊天返回列表页时刷新目录树（聊天中可能增删改了笔记/日程）
         Task { await viewModel.loadTree() }
+        // 同步刷新提醒页数据（聊天中可能新建了日程提醒）
+        Task { await remindersViewModel.load() }
     }
 }
 

@@ -224,6 +224,8 @@ final class ChatViewModel: ObservableObject {
                 let preview = String(fullResponse.prefix(30))
                 conversations[idx] = ConversationMeta(id: conversations[idx].id, title: conversations[idx].title, preview: preview)
             }
+            // 聊天可能创建/修改了日程与提醒，重新调度本地通知
+            await NotificationManager.shared.refreshFromServer()
             finishStream(error: nil)
         } catch {
             finishStream(error: error.localizedDescription)

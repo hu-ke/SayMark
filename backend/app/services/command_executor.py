@@ -68,6 +68,7 @@ async def execute(parsed: dict) -> dict:
             "create_event": _handle_create_event,
             "append_note": _handle_append_note,
             "set_reminder": _handle_set_reminder,
+            "cancel_reminder": _handle_cancel_reminder,
             "update_schedule": _handle_update_schedule,
             "save_place": _handle_save_place,
             "create_folder": _handle_create_folder,
@@ -261,12 +262,24 @@ async def _handle_set_reminder(parsed: dict) -> dict:
         return _result("set_reminder", False, err)
     updated = await db.set_reminder(file_id, minutes, recurrence, end_date)
     rc_label = {"daily": "每天", "weekly": "每周", "monthly": "每月"}.get(recurrence, "")
-    label = f"已设置{'「' + rc_label + '」' if rc_label else ''}提前 {minutes} 分钟提醒"
+    if minutes == 0:
+        label = "已设置到点提醒"
+    else:
+        label = f"已设置{'「' + rc_label + '」' if rc_label else ''}提前 {minutes} 分钟提醒"
     if end_date:
         label += f"（至{end_date}）"
-    if minutes == 0:
-        label = "已取消提醒"
     return _result("set_reminder", True, label, updated)
+
+
+async def _handle_cancel_reminder(parsed: dict) -> dict:
+    """取消日程提醒。"""
+    file_id, doc, err = await _resolve_file(parsed, "日程")
+    if err:
+        return _result("cancel_reminder", False, err)
+    updated = await db.clear_reminder(file_id)
+    if updated is None:
+        return _result("cancel_reminder", False, "取消提醒失败")
+    return _result("cancel_reminder", True, "已取消提醒", updated)
 
 
 _VALID_REPEAT_UNITS = {"seconds", "minutes", "hours", "days"}

@@ -176,7 +176,7 @@ _AGENT_SYSTEM_PROMPT = f"""\
    参数：target_id?(文件id), name?(文件名兜底), content(要补充的内容)
 
 5. set_reminder — 设置提醒
-   参数：target_id?(日程id), name?(日程名兜底), minutes(提前分钟数, 0=取消), recurrence?(空/daily/weekly/monthly), recurrence_end_date?(YYYY-MM-DD)
+   参数：target_id?(日程id), name?(日程名兜底), minutes(提前分钟数, 0=到点提醒即在日程开始时刻提醒), recurrence?(空/daily/weekly/monthly), recurrence_end_date?(YYYY-MM-DD)
 
 6. create_folder — 创建文件夹
    参数：name, parent_folder_id?(父目录id)
@@ -202,6 +202,9 @@ _AGENT_SYSTEM_PROMPT = f"""\
 13. update_schedule — 修改已有日程的时间/日期/提醒/重复属性
     参数：target_id?(日程id), name?(日程名兜底), date?(YYYY-MM-DD), time?(HH:MM), reminder_minutes?(提前分钟数, 0=取消), repeat_enabled?(true/false), repeat_unit?(seconds/minutes/hours/days), repeat_value?(数字)
 
+14. cancel_reminder — 取消日程提醒
+    参数：target_id?(日程id), name?(日程名兜底)
+
 ## 输出格式
 
 - 需要调用工具时（可一次多个），必须包含 thinking 字段说明你的计划：
@@ -219,7 +222,8 @@ _AGENT_SYSTEM_PROMPT = f"""\
 5. **创建日程 + 提醒必须分两步**：在同一组 tool_calls 中先 create_event，再 set_reminder（用 name 引用刚创建的日程名）。只创建日程不设置提醒是不够的。
 6. set_reminder 引用刚创建的日程时，用 name 参数传入日程标题，不要用 id（此时还没有 id）。系统会按名称自动匹配。
 7. **创建笔记时禁止添油加醋**：用户说「记一下：今天买了苹果」→ content="今天买了苹果"（只修正错别字和格式），**不要**扩展成「今天买了苹果，苹果富含维生素…」之类的废话。你只是帮用户整理，不是代用户写作。
-8. 只输出 JSON，不要 markdown 代码块。"""
+8. **倒计时提醒**：用户说「X分钟后/X小时后提醒我做Y」（相对现在，无具体钟点）时，先 create_event(date=今天, time=当前时间+X)，再 set_reminder(name=Y, minutes=0)。minutes=0 表示到点提醒，不是取消；取消提醒用 cancel_reminder。
+9. 只输出 JSON，不要 markdown 代码块。"""
 
 _MAX_AGENT_ITERATIONS = 5  # agent 循环最大迭代次数
 
@@ -259,6 +263,7 @@ def _action_label(step: dict) -> str:
         "create_event": f"创建日程{name_part}",
         "append_note": f"补充内容到{name_part or '笔记'}",
         "set_reminder": f"设置提醒{name_part}",
+        "cancel_reminder": f"取消提醒{name_part}",
         "update_schedule": f"调整日程{name_part}",
         "save_place": f"保存地点{name_part}",
         "create_folder": f"创建文件夹{name_part}",
