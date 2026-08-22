@@ -122,20 +122,19 @@ final class APIClient {
         try await requestEmpty(path: "/api/folders/\(id)", method: "DELETE")
     }
 
-    // MARK: - 文件
+    // MARK: - 文件（笔记）
 
     func getFile(id: String) async throws -> NoteFile {
         try await request(path: "/api/files/\(id)", method: "GET")
     }
 
-    func createFile(name: String, content: String, parentId: String, type: String = "note", schedule: SchedulePayload? = nil) async throws -> NoteFile {
+    func createFile(name: String, content: String, parentId: String) async throws -> NoteFile {
         struct Body: Encodable {
             let name: String; let content: String; let parent_id: String
             let type: String
-            let schedule: SchedulePayload?
         }
         return try await request(path: "/api/files", method: "POST",
-                                 body: Body(name: name, content: content, parent_id: parentId, type: type, schedule: schedule))
+                                 body: Body(name: name, content: content, parent_id: parentId, type: "note"))
     }
 
     func renameFile(id: String, name: String?) async throws {
@@ -175,10 +174,6 @@ final class APIClient {
                                body: Body(type: type, source_id: sourceId, target_id: targetId))
     }
 
-    func updateSchedule(fileId: String, schedule: ScheduleUpdatePayload) async throws -> NoteFile {
-        try await request(path: "/api/files/\(fileId)/schedule", method: "PATCH", body: schedule)
-    }
-
     // MARK: - 笔记与 AI 指令
 
     /// 语音转笔记（POST /api/notes）
@@ -209,38 +204,74 @@ final class APIClient {
                                  body: Body(confirmation_id: confirmationId, confirmed: confirmed))
     }
 
-    // MARK: - 日程（Events）
+    // MARK: - 安排（Appointments，一次性）
 
-    /// 获取某月有日程的日期（GET /api/events/month/{year}/{month}）
+    /// 获取所有安排
+    func getAppointments() async throws -> [Appointment] {
+        try await request(path: "/api/appointments", method: "GET")
+    }
+
+    /// 获取某天（YYYY-MM-DD）的安排
+    func getAppointmentsByDate(_ date: String) async throws -> [Appointment] {
+        try await request(path: "/api/appointments/date/\(date)", method: "GET")
+    }
+
+    /// 获取某月有安排的日期（GET /api/appointments/month/{year}/{month}）
     func getMonthSummary(year: Int, month: Int) async throws -> [MonthSummaryItem] {
-        try await request(path: "/api/events/month/\(year)/\(month)", method: "GET")
+        try await request(path: "/api/appointments/month/\(year)/\(month)", method: "GET")
     }
 
-    /// 获取某天的所有日程（GET /api/events/date/{date}）
-    func getEventsByDate(_ date: String) async throws -> [CalendarEvent] {
-        try await request(path: "/api/events/date/\(date)", method: "GET")
+    /// 创建安排
+    func createAppointment(name: String, date: String, time: String, content: String) async throws -> Appointment {
+        struct Body: Encodable {
+            let name: String; let date: String; let time: String; let content: String
+        }
+        return try await request(path: "/api/appointments", method: "POST",
+                                 body: Body(name: name, date: date, time: time, content: content))
     }
 
-    /// 删除日程（DELETE /api/events/{id}）
-    func deleteEvent(id: String) async throws {
-        try await requestEmpty(path: "/api/events/\(id)", method: "DELETE")
+    /// 更新安排
+    func updateAppointment(id: String, name: String?, date: String?, time: String?, content: String?) async throws -> Appointment {
+        struct Body: Encodable {
+            let name: String?; let date: String?; let time: String?; let content: String?
+        }
+        return try await request(path: "/api/appointments/\(id)", method: "PATCH",
+                                 body: Body(name: name, date: date, time: time, content: content))
     }
 
-    // MARK: - 提醒（Reminders）
-
-    /// 获取所有带提醒的日程（GET /api/reminders）
-    func getReminders() async throws -> [CalendarEvent] {
-        try await request(path: "/api/reminders", method: "GET")
+    /// 删除安排
+    func deleteAppointment(id: String) async throws {
+        try await requestEmpty(path: "/api/appointments/\(id)", method: "DELETE")
     }
 
-    /// 获取所有提醒（返回 NoteFile 列表，用于通知调度）
-    func getReminderNotes() async throws -> [NoteFile] {
-        try await request(path: "/api/reminders", method: "GET")
+    // MARK: - 闹钟（Alarms，周期性）
+
+    /// 获取所有闹钟
+    func getAlarms() async throws -> [Alarm] {
+        try await request(path: "/api/alarms", method: "GET")
     }
 
-    /// 取消提醒（PATCH /api/reminders/{id}）
-    func cancelReminder(id: String) async throws {
-        try await requestEmpty(path: "/api/reminders/\(id)", method: "PATCH")
+    /// 创建闹钟
+    func createAlarm(name: String, time: String, recurrence: String, content: String) async throws -> Alarm {
+        struct Body: Encodable {
+            let name: String; let time: String; let recurrence: String; let content: String
+        }
+        return try await request(path: "/api/alarms", method: "POST",
+                                 body: Body(name: name, time: time, recurrence: recurrence, content: content))
+    }
+
+    /// 更新闹钟
+    func updateAlarm(id: String, name: String?, time: String?, recurrence: String?, content: String?) async throws -> Alarm {
+        struct Body: Encodable {
+            let name: String?; let time: String?; let recurrence: String?; let content: String?
+        }
+        return try await request(path: "/api/alarms/\(id)", method: "PATCH",
+                                 body: Body(name: name, time: time, recurrence: recurrence, content: content))
+    }
+
+    /// 删除闹钟
+    func deleteAlarm(id: String) async throws {
+        try await requestEmpty(path: "/api/alarms/\(id)", method: "DELETE")
     }
 }
 

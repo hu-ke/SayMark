@@ -34,24 +34,27 @@ CREATE TABLE IF NOT EXISTS files (
     name VARCHAR(255) NOT NULL,
     content TEXT DEFAULT '',
     parent_id INTEGER REFERENCES folders(id) ON DELETE SET NULL,
-    type VARCHAR(10) DEFAULT 'note' CHECK (type IN ('note', 'event')),
-    date DATE,
-    "time" TIME,
-    reminder_minutes INTEGER,
+    -- note=笔记 | appointment=安排(一次性) | alarm=闹钟(周期性)
+    type VARCHAR(20) DEFAULT 'note' CHECK (type IN ('note', 'appointment', 'alarm')),
+    date DATE,          -- 仅 appointment 使用：具体日期 YYYY-MM-DD
+    "time" TIME,        -- appointment=开始时间；alarm=周期触发时间
     recurrence VARCHAR(20) CHECK (recurrence IS NULL OR recurrence IN ('', 'daily', 'weekly', 'monthly')),
-    recurrence_end_date DATE,
-    schedule TEXT DEFAULT '',
     position INTEGER NOT NULL DEFAULT 0,
     embedding FLOAT8[] DEFAULT '{}',
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 为已有库补齐 schedule 字段（日程属性独立存储为 JSON 字符串）
-ALTER TABLE files ADD COLUMN IF NOT EXISTS schedule TEXT DEFAULT '';
 -- 为已有库补齐 position 字段（同级排序）
 ALTER TABLE folders ADD COLUMN IF NOT EXISTS position INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE files ADD COLUMN IF NOT EXISTS position INTEGER NOT NULL DEFAULT 0;
+
+-- 迁移：旧的 type='event' 统一改名 appointment；其中带 recurrence 的转为闹钟 alarm
+ALTER TABLE files DROP CONSTRAINT IF EXISTS files_type_check;
+ALTER TABLE files ALTER COLUMN type TYPE VARCHAR(20);
+ALTER TABLE files ADD CONSTRAINT files_type_check CHECK (type IN ('note', 'appointment', 'alarm'));
+UPDATE files SET type = 'appointment' WHERE type = 'event';
+UPDATE files SET type = 'alarm' WHERE type = 'appointment' AND recurrence IS NOT NULL AND recurrence <> '';
 
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_folders_parent ON folders(parent_id);

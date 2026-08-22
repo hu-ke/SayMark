@@ -40,7 +40,8 @@ struct SayMarkTabBar: View {
     private let tabs: [(String, String)] = [
         ("doc", "文件"),
         ("cal", "日历"),
-        ("bell", "提醒"),
+        ("list", "安排"),
+        ("bell", "闹钟"),
         ("gear", "设置"),
     ]
 
@@ -59,10 +60,12 @@ struct SayMarkTabBar: View {
                     tabButton(index: 1)
                     // FAB 占位
                     Color.clear.frame(width: 56)
-                    // 提醒
+                    // 安排
                     tabButton(index: 2)
-                    // 设置
+                    // 闹钟
                     tabButton(index: 3)
+                    // 设置
+                    tabButton(index: 4)
                 }
                 .padding(.top, 9)
                 .frame(maxHeight: .infinity, alignment: .top)
@@ -174,6 +177,10 @@ struct TabIcon: View {
             case "plus":    PlusIcon()
             case "keyboard": KeyboardIcon()
             case "mic":     MicIcon()
+            case "list":
+                Image(systemName: "list.bullet")
+                    .font(.system(size: size * 0.8, weight: .medium))
+                    .foregroundColor(color)
             case "gear":
                 Image(systemName: "gearshape.fill")
                     .font(.system(size: size * 0.85, weight: .medium))

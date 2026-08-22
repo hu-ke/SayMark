@@ -137,25 +137,6 @@ struct FolderTreeView: View {
         return f.string(from: Date())
     }
 
-    private var todayTodoCount: Int {
-        let today = plainDateString(Date())
-        return viewModel.tree.reduce(0) { $0 + countTodayEvents(in: $1, date: today) }
-    }
-
-    private func plainDateString(_ date: Date) -> String {
-        let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd"
-        return f.string(from: date)
-    }
-
-    private func countTodayEvents(in node: TreeNode, date: String) -> Int {
-        var count = node.files.filter { $0.isEvent && $0.date == date }.count
-        for child in node.children {
-            count += countTodayEvents(in: child, date: date)
-        }
-        return count
-    }
-
     private var pageHeader: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
@@ -163,10 +144,6 @@ struct FolderTreeView: View {
                     .font(.system(size: 22, weight: .bold))
                     .kerning(0.2)
                     .foregroundColor(UIConstants.label)
-                Text("今天 \(todayTodoCount) 项待办")
-                    .font(.system(size: 13))
-                    .foregroundColor(UIConstants.label3)
-                    .kerning(-0.08)
             }
             Spacer()
         }
@@ -660,24 +637,16 @@ struct FileRowCard: View {
     private var rowContent: some View {
         HStack(spacing: 12) {
             RowIcon(
-                iconType: file.isEvent ? "cal" : "doc",
-                color: file.isEvent ? UIConstants.orange : UIConstants.label3
+                iconType: "doc",
+                color: UIConstants.label3
             )
             VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 6) {
-                    Text(file.name)
-                        .font(.system(size: 17))
-                        .foregroundColor(UIConstants.label)
-                        .kerning(-0.41)
-                        .lineLimit(1)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    if file.isEvent {
-                        CapsuleBadge(text: "日程")
-                    }
-                    if file.isEvent && file.isRecurring {
-                        CapsuleBadge(text: "重复", color: Color(red: 0.686, green: 0.322, blue: 0.871))
-                    }
-                }
+                Text(file.name)
+                    .font(.system(size: 17))
+                    .foregroundColor(UIConstants.label)
+                    .kerning(-0.41)
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 Text(formatTime(file.createdAt))
                     .font(.system(size: 13))
                     .foregroundColor(UIConstants.label3)

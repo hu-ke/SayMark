@@ -1,11 +1,5 @@
 import SwiftUI
 
-private struct RepeatUnitOption: Identifiable {
-    let value: String
-    let label: String
-    var id: String { value }
-}
-
 struct NewItemSheet: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject var viewModel: FolderTreeViewModel
@@ -14,23 +8,6 @@ struct NewItemSheet: View {
 
     @State private var selectedType: String
     @State private var name: String
-
-    // 文件子类型：普通文件(note) / 日程文件(event)
-    @State private var fileKind: String = "note"
-
-    // 日程属性
-    @State private var scheduleDate: Date = Date()
-    @State private var scheduleTime: Date = Date()
-    @State private var repeatEnabled: Bool = false
-    @State private var repeatUnit: String = "days"
-    @State private var repeatValue: Int = 1
-
-    private let repeatUnits: [RepeatUnitOption] = [
-        RepeatUnitOption(value: "seconds", label: "秒"),
-        RepeatUnitOption(value: "minutes", label: "分钟"),
-        RepeatUnitOption(value: "hours", label: "小时"),
-        RepeatUnitOption(value: "days", label: "天"),
-    ]
 
     init(viewModel: FolderTreeViewModel, parentId: String? = nil, preSelectedType: String? = nil) {
         self.viewModel = viewModel
@@ -97,78 +74,6 @@ struct NewItemSheet: View {
                         }
                     }
                     .cardStyle()
-
-                    // 文件子类型
-                    if selectedType == "file" {
-                        sectionHeader("文件类型", top: 14)
-                        VStack(spacing: 0) {
-                            fileKindOption(kind: "note", icon: "doc.text.fill", label: "普通文件")
-                            Divider().padding(.leading, 56)
-                            fileKindOption(kind: "event", icon: "calendar", label: "日程文件")
-                        }
-                        .cardStyle()
-                    }
-
-                    // 日程时间与重复
-                    if selectedType == "file" && fileKind == "event" {
-                        sectionHeader("日程时间", top: 14)
-                        VStack(spacing: 0) {
-                            DatePicker("日期", selection: $scheduleDate, displayedComponents: .date)
-                                .font(.system(size: 16))
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 11)
-
-                            Divider().padding(.leading, 16)
-
-                            DatePicker("时间", selection: $scheduleTime, displayedComponents: .hourAndMinute)
-                                .font(.system(size: 16))
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 11)
-                        }
-                        .cardStyle()
-
-                        sectionHeader("重复", top: 14)
-                        VStack(spacing: 0) {
-                            Toggle("重复", isOn: $repeatEnabled)
-                                .tint(UIConstants.blue)
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 11)
-
-                            if repeatEnabled {
-                                Divider().padding(.leading, 16)
-
-                                HStack {
-                                    Text("单位")
-                                        .font(.system(size: 16))
-                                        .foregroundColor(UIConstants.label)
-                                    Spacer()
-                                    Picker("单位", selection: $repeatUnit) {
-                                        ForEach(repeatUnits, id: \.value) { unit in
-                                            Text(unit.label).tag(unit.value)
-                                        }
-                                    }
-                                    .pickerStyle(.menu)
-                                    .tint(UIConstants.label3)
-                                }
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 11)
-
-                                Divider().padding(.leading, 16)
-
-                                HStack {
-                                    Text("值")
-                                        .font(.system(size: 16))
-                                        .foregroundColor(UIConstants.label)
-                                    Spacer()
-                                    Stepper("\(repeatValue)", value: $repeatValue, in: 1...9999)
-                                        .font(.system(size: 16, weight: .medium))
-                                }
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 11)
-                            }
-                        }
-                        .cardStyle()
-                    }
 
                     // 名称输入
                     sectionHeader("名称", top: 14)
@@ -240,32 +145,6 @@ struct NewItemSheet: View {
         .buttonStyle(.plain)
     }
 
-    private func fileKindOption(kind: String, icon: String, label: String) -> some View {
-        Button {
-            withAnimation(.easeInOut(duration: 0.15)) {
-                fileKind = kind
-            }
-        } label: {
-            HStack(spacing: 12) {
-                RowIcon(systemName: icon, color: kind == "event" ? UIConstants.orange : UIConstants.label3)
-                Text(label)
-                    .font(.system(size: 17))
-                    .foregroundColor(UIConstants.label)
-                    .kerning(-0.41)
-                Spacer()
-                if fileKind == kind {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 18, weight: .medium))
-                        .foregroundColor(UIConstants.blue)
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 11)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
-
     private func create() {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return }
@@ -273,29 +152,10 @@ struct NewItemSheet: View {
         Task {
             if selectedType == "folder" {
                 await viewModel.createFolder(name: trimmed, parentId: parentId)
-            } else if fileKind == "event" {
-                let schedule = SchedulePayload(
-                    date: dateString(from: scheduleDate),
-                    time: timeString(from: scheduleTime),
-                    repeatRule: ScheduleRepeat(enabled: repeatEnabled, unit: repeatUnit, value: repeatValue)
-                )
-                await viewModel.createFile(name: trimmed, content: "", parentId: pid, type: "event", schedule: schedule)
             } else {
-                await viewModel.createFile(name: trimmed, content: "", parentId: pid, type: "note", schedule: nil)
+                await viewModel.createFile(name: trimmed, content: "", parentId: pid)
             }
         }
         dismiss()
-    }
-
-    private func dateString(from date: Date) -> String {
-        let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd"
-        return f.string(from: date)
-    }
-
-    private func timeString(from date: Date) -> String {
-        let f = DateFormatter()
-        f.dateFormat = "HH:mm"
-        return f.string(from: date)
     }
 }

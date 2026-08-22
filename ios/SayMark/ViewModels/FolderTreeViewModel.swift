@@ -50,13 +50,10 @@ final class FolderTreeViewModel: ObservableObject {
         }
     }
 
-    func createFile(name: String, content: String, parentId: String, type: String = "note", schedule: SchedulePayload? = nil) async {
+    func createFile(name: String, content: String, parentId: String) async {
         do {
-            _ = try await api.createFile(name: name, content: content, parentId: parentId, type: type, schedule: schedule)
+            _ = try await api.createFile(name: name, content: content, parentId: parentId)
             await loadTree()
-            if schedule != nil || type == "event" {
-                await NotificationManager.shared.refreshFromServer()
-            }
         } catch {
             self.error = error.localizedDescription
         }

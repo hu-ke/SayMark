@@ -65,11 +65,12 @@ async def execute(parsed: dict) -> dict:
     try:
         handlers = {
             "create_note": _handle_create_note,
-            "create_event": _handle_create_event,
+            "create_appointment": _handle_create_appointment,
+            "create_alarm": _handle_create_alarm,
             "append_note": _handle_append_note,
-            "set_reminder": _handle_set_reminder,
-            "cancel_reminder": _handle_cancel_reminder,
-            "update_schedule": _handle_update_schedule,
+            "update_appointment": _handle_update_appointment,
+            "update_alarm": _handle_update_alarm,
+            "delete_alarm": _handle_delete_alarm,
             "save_place": _handle_save_place,
             "create_folder": _handle_create_folder,
             "rename": _handle_rename,
@@ -117,7 +118,7 @@ def _inject_created_ids(step: dict, created: dict[str, int]) -> None:
     key_map = {
         "move_file": ("to_folder_id", "to_folder"),
         "create_note": ("target_folder_id", "target_folder"),
-        "create_event": ("target_folder_id", "target_folder"),
+        "create_appointment": ("target_folder_id", "target_folder"),
         "create_folder": ("parent_folder_id", "parent_folder"),
         "list": ("target_folder_id", "path"),
     }
@@ -207,24 +208,19 @@ async def _handle_create_note(parsed: dict) -> dict:
     return _result("create_note", True, msg, doc)
 
 
-async def _handle_create_event(parsed: dict) -> dict:
-    title = parsed.get("title", "")
+async def _handle_create_appointment(parsed: dict) -> dict:
+    title = parsed.get("title", "") or parsed.get("name", "")
     date = parsed.get("date", "")
     time_ = parsed.get("time", "")
     content = parsed.get("content", "")
     if not title:
-        return _result("create_event", False, "缺少日程标题 title")
+        return _result("create_appointment", False, "缺少安排标题")
     if not date:
-        return _result("create_event", False, "缺少日程日期 date (YYYY-MM-DD)")
-    folder_id, msg_parts = await _resolve_target_folder(parsed)
-    # 详情页已展示日期/时间，content 只保存正文，不重复拼日期/时间
-    markdown = content
-    doc = await db.create_file(title, markdown, folder_id, file_type="event", date=date, time=time_)
-    await _store_embedding(doc["id"], title, markdown)
-    msg = "日程已创建"
-    if msg_parts:
-        msg += "；" + "；".join(msg_parts)
-    return _result("create_event", True, msg, doc)
+        return _result("create_appointment", False, "缺少安排日期 date (YYYY-MM-DD)")
+    # 安排为一次性日程，不归属文件夹
+    doc = await db.create_file(title, content, None, file_type="appointment", date=date, time=time_)
+    await _store_embedding(doc["id"], title, content)
+    return _result("create_appointment", True, "安排已创建", doc)
 
 
 async def _handle_append_note(parsed: dict) -> dict:
@@ -241,107 +237,88 @@ async def _handle_append_note(parsed: dict) -> dict:
     return _result("append_note", True, "笔记已补充", updated)
 
 
-async def _handle_set_reminder(parsed: dict) -> dict:
-    minutes = parsed.get("minutes")
-    if minutes is None:
-        return _result("set_reminder", False, "缺少 minutes（提前多少分钟）")
-    try:
-        minutes = int(minutes)
-    except (ValueError, TypeError):
-        return _result("set_reminder", False, f"minutes 必须是数字，收到：{minutes}")
-    if minutes < 0:
-        return _result("set_reminder", False, "提醒分钟数不能为负")
-    recurrence = str(parsed.get("recurrence") or "")
-    end_date = str(parsed.get("recurrence_end_date") or "")
-    if recurrence not in ("", "daily", "weekly", "monthly"):
-        return _result("set_reminder", False, f"recurrence 无效：{recurrence}")
-    if minutes == 0:
-        recurrence = ""
-    file_id, doc, err = await _resolve_file(parsed, "日程")
+async def _handle_create_alarm(parsed: dict) -> dict:
+    name = parsed.get("name", "") or parsed.get("title", "")
+    time_ = str(parsed.get("time") or "").strip()
+    recurrence = str(parsed.get("recurrence") or "daily").strip() or "daily"
+    content = parsed.get("content", "")
+    if not name:
+        return _result("create_alarm", False, "缺少闹钟名称")
+    if not time_:
+        return _result("create_alarm", False, "缺少触发时间 time (HH:MM)")
+    if recurrence not in ("daily", "weekly", "monthly"):
+        return _result("create_alarm", False, f"recurrence 无效：{recurrence}")
+    # 闹钟为周期性提醒，不归属文件夹
+    doc = await db.create_file(name, content, None, file_type="alarm", time=time_, recurrence=recurrence)
+    await _store_embedding(doc["id"], name, content)
+    rc_label = {"daily": "每天", "weekly": "每周", "monthly": "每月"}.get(recurrence, recurrence)
+    return _result("create_alarm", True, f"闹钟已创建（{rc_label} {time_}）", doc)
+
+
+async def _handle_delete_alarm(parsed: dict) -> dict:
+    """删除闹钟。"""
+    file_id, doc, err = await _resolve_file(parsed, "闹钟")
     if err:
-        return _result("set_reminder", False, err)
-    updated = await db.set_reminder(file_id, minutes, recurrence, end_date)
-    rc_label = {"daily": "每天", "weekly": "每周", "monthly": "每月"}.get(recurrence, "")
-    if minutes == 0:
-        label = "已设置到点提醒"
-    else:
-        label = f"已设置{'「' + rc_label + '」' if rc_label else ''}提前 {minutes} 分钟提醒"
-    if end_date:
-        label += f"（至{end_date}）"
-    return _result("set_reminder", True, label, updated)
+        return _result("delete_alarm", False, err)
+    ok = await db.delete_file(file_id)
+    if not ok:
+        return _result("delete_alarm", False, "删除闹钟失败")
+    return _result("delete_alarm", True, "已删除闹钟", None)
 
 
-async def _handle_cancel_reminder(parsed: dict) -> dict:
-    """取消日程提醒。"""
-    file_id, doc, err = await _resolve_file(parsed, "日程")
+async def _handle_update_appointment(parsed: dict) -> dict:
+    """更新安排（一次性）的标题/日期/时间/内容。"""
+    file_id, doc, err = await _resolve_file(parsed, "安排")
     if err:
-        return _result("cancel_reminder", False, err)
-    updated = await db.clear_reminder(file_id)
-    if updated is None:
-        return _result("cancel_reminder", False, "取消提醒失败")
-    return _result("cancel_reminder", True, "已取消提醒", updated)
+        return _result("update_appointment", False, err)
 
-
-_VALID_REPEAT_UNITS = {"seconds", "minutes", "hours", "days"}
-_REPEAT_UNIT_LABELS = {"seconds": "秒", "minutes": "分钟", "hours": "小时", "days": "天"}
-
-
-async def _handle_update_schedule(parsed: dict) -> dict:
-    """更新日程属性（日期/时间/提醒/重复）。用于详情页内语音调整日程。"""
-    file_id, doc, err = await _resolve_file(parsed, "日程")
-    if err:
-        return _result("update_schedule", False, err)
-
-    def _opt_int(key: str) -> int | None:
-        v = parsed.get(key)
-        if v is None or v == "":
-            return None
-        try:
-            return int(v)
-        except (ValueError, TypeError):
-            return None
-
+    name = str(parsed.get("name") or "").strip() or None
     date = str(parsed.get("date") or "").strip() or None
     time = str(parsed.get("time") or "").strip() or None
-    reminder_minutes = _opt_int("reminder_minutes")
+    content = parsed.get("content")
 
-    repeat_enabled = parsed.get("repeat_enabled")
-    if repeat_enabled is not None and not isinstance(repeat_enabled, bool):
-        repeat_enabled = str(repeat_enabled).lower() in ("true", "1", "yes")
-
-    repeat_unit = str(parsed.get("repeat_unit") or "").strip() or None
-    repeat_value = _opt_int("repeat_value")
-
-    if repeat_unit and repeat_unit not in _VALID_REPEAT_UNITS:
-        return _result("update_schedule", False, f"repeat_unit 无效：{repeat_unit}")
-
-    updated = await db.update_file_schedule(
-        file_id,
-        date=date,
-        time=time,
-        reminder_minutes=reminder_minutes,
-        repeat_enabled=repeat_enabled,
-        repeat_unit=repeat_unit,
-        repeat_value=repeat_value,
-    )
+    updated = await db.update_appointment(file_id, name=name, date=date, time=time, content=content)
     if updated is None:
-        return _result("update_schedule", False, "日程不存在或更新失败")
+        return _result("update_appointment", False, "安排不存在或更新失败")
 
     parts: list[str] = []
+    if name:
+        parts.append(f"标题 {name}")
     if date:
         parts.append(f"日期 {date}")
     if time:
         parts.append(f"时间 {time}")
-    if reminder_minutes is not None:
-        parts.append("取消提醒" if reminder_minutes <= 0 else f"提前 {reminder_minutes} 分钟提醒")
-    if repeat_enabled is not None:
-        if repeat_enabled and repeat_unit and repeat_value:
-            unit_label = _REPEAT_UNIT_LABELS.get(repeat_unit, repeat_unit)
-            parts.append(f"每 {repeat_value} {unit_label}重复")
-        elif not repeat_enabled:
-            parts.append("取消重复")
-    label = "已更新日程：" + "，".join(parts) if parts else "日程已更新"
-    return _result("update_schedule", True, label, updated)
+    label = "已更新安排：" + "，".join(parts) if parts else "安排已更新"
+    return _result("update_appointment", True, label, updated)
+
+
+async def _handle_update_alarm(parsed: dict) -> dict:
+    """更新闹钟（周期性）的标题/时间/周期/内容。"""
+    file_id, doc, err = await _resolve_file(parsed, "闹钟")
+    if err:
+        return _result("update_alarm", False, err)
+
+    name = str(parsed.get("name") or "").strip() or None
+    time = str(parsed.get("time") or "").strip() or None
+    recurrence = str(parsed.get("recurrence") or "").strip() or None
+    if recurrence and recurrence not in ("daily", "weekly", "monthly"):
+        return _result("update_alarm", False, f"recurrence 无效：{recurrence}")
+    content = parsed.get("content")
+
+    updated = await db.update_alarm(file_id, name=name, time=time, recurrence=recurrence, content=content)
+    if updated is None:
+        return _result("update_alarm", False, "闹钟不存在或更新失败")
+
+    parts: list[str] = []
+    if name:
+        parts.append(f"标题 {name}")
+    if time:
+        parts.append(f"时间 {time}")
+    if recurrence:
+        rc_label = {"daily": "每天", "weekly": "每周", "monthly": "每月"}.get(recurrence, recurrence)
+        parts.append(f"周期 {rc_label}")
+    label = "已更新闹钟：" + "，".join(parts) if parts else "闹钟已更新"
+    return _result("update_alarm", True, label, updated)
 
 
 _device_id: str | None = None

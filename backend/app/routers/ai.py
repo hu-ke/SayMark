@@ -62,7 +62,7 @@ def _is_skip_confirm(text: str) -> bool:
 
 # 聊天系统提示词
 _CHAT_SYSTEM_PROMPT = (
-    "你是 SayMark 语音记事本助手。帮助用户管理笔记、日程、文件夹。\n"
+    "你是 SayMark 语音记事本助手。帮助用户管理笔记、安排、闹钟、文件夹。\n"
     "现在是：{current_time}\n"
     "注意：当对话历史中出现「[已执行] xxx」的系统消息时，表示该操作已经真实完成（笔记已写入、日程已创建、文件已删除等），"
     "你需要根据这个结果自然地回复用户，而不是说「我可以帮你」或再次尝试执行。\n"
@@ -169,14 +169,16 @@ _AGENT_SYSTEM_PROMPT = f"""\
    参数：content(备忘原文), target_folder_id?(目录id)
    重要：content 只做优化和结构化（修正错别字、整理格式），**绝对不要**添加用户没说的内容、不要润色扩展、不要添油加醋。
 
-3. create_event — 创建日程（有明确时间的安排）
-   参数：title(标题), date(YYYY-MM-DD), time?(HH:MM), content(详情), target_folder_id?(目录id)
+3. create_appointment — 创建安排（有明确时间的一次性事项，倒计时「X分钟后/X小时后」也算）
+   参数：title(标题), date(YYYY-MM-DD), time?(HH:MM), content(详情)
+   注意：「X分钟后/小时后」→ date=今天, time=当前时间+X；不要用 create_alarm。
 
-4. append_note — 补充内容到已有笔记或日程
+4. append_note — 补充内容到已有笔记、安排或闹钟
    参数：target_id?(文件id), name?(文件名兜底), content(要补充的内容)
 
-5. set_reminder — 设置提醒
-   参数：target_id?(日程id), name?(日程名兜底), minutes(提前分钟数, 0=到点提醒即在日程开始时刻提醒), recurrence?(空/daily/weekly/monthly), recurrence_end_date?(YYYY-MM-DD)
+5. create_alarm — 创建闹钟（周期性提醒，如「每天1点喊我睡觉」）
+   参数：name(名称), time(HH:MM 触发时间), recurrence(daily/weekly/monthly，缺省 daily), content(备注)
+   注意：只有「每天/每周/每月 + 时间」的周期性提醒才用 create_alarm；一次性倒计时用 create_appointment。
 
 6. create_folder — 创建文件夹
    参数：name, parent_folder_id?(父目录id)
@@ -199,11 +201,14 @@ _AGENT_SYSTEM_PROMPT = f"""\
 12. save_place — 保存地点
     参数：name(地名), lat(纬度), lon(经度)
 
-13. update_schedule — 修改已有日程的时间/日期/提醒/重复属性
-    参数：target_id?(日程id), name?(日程名兜底), date?(YYYY-MM-DD), time?(HH:MM), reminder_minutes?(提前分钟数, 0=取消), repeat_enabled?(true/false), repeat_unit?(seconds/minutes/hours/days), repeat_value?(数字)
+13. update_appointment — 修改已有安排的日期/时间/标题
+    参数：target_id?(安排id), name?(名称兜底), date?(YYYY-MM-DD), time?(HH:MM), content?(正文)
 
-14. cancel_reminder — 取消日程提醒
-    参数：target_id?(日程id), name?(日程名兜底)
+14. update_alarm — 修改已有闹钟的时间/周期
+    参数：target_id?(闹钟id), name?(名称兜底), time?(HH:MM), recurrence?(daily/weekly/monthly), content?(备注)
+
+15. delete_alarm — 删除闹钟
+    参数：target_id?(闹钟id), name?(名称兜底)
 
 ## 输出格式
 
@@ -215,15 +220,13 @@ _AGENT_SYSTEM_PROMPT = f"""\
 
 ## 核心规则
 
-1. **优先用 run_query 查询信息**：需要查找已有笔记/日程/文件夹时，先生成 SQL 查询。
-2. 区分笔记和日程：有具体时间点 → create_event；只是记东西 → create_note。
+1. **优先用 run_query 查询信息**：需要查找已有笔记/安排/闹钟/文件夹时，先生成 SQL 查询。
+2. 区分笔记 / 安排 / 闹钟：有具体未来时间点（一次性）→ create_appointment；「X分钟后/X小时后」的倒计时也是一次性 → create_appointment(date=今天, time=当前+X)；周期性提醒（每天/每周/每月 + 时间）→ create_alarm；只是记东西 → create_note。
 3. 操作已存在的项时，先 run_query 找到 id，再操作。
 4. 删除操作需用户确认：输出 done 并在 reply 中询问。
-5. **创建日程 + 提醒必须分两步**：在同一组 tool_calls 中先 create_event，再 set_reminder（用 name 引用刚创建的日程名）。只创建日程不设置提醒是不够的。
-6. set_reminder 引用刚创建的日程时，用 name 参数传入日程标题，不要用 id（此时还没有 id）。系统会按名称自动匹配。
-7. **创建笔记时禁止添油加醋**：用户说「记一下：今天买了苹果」→ content="今天买了苹果"（只修正错别字和格式），**不要**扩展成「今天买了苹果，苹果富含维生素…」之类的废话。你只是帮用户整理，不是代用户写作。
-8. **倒计时提醒**：用户说「X分钟后/X小时后提醒我做Y」（相对现在，无具体钟点）时，先 create_event(date=今天, time=当前时间+X)，再 set_reminder(name=Y, minutes=0)。minutes=0 表示到点提醒，不是取消；取消提醒用 cancel_reminder。
-9. 只输出 JSON，不要 markdown 代码块。"""
+5. **创建安排/闹钟一步到位**：安排和闹钟是独立实体，各用一条工具调用创建即可，不要分两步。例如「每天中午12点喊我午休」→ create_alarm(name=午休, time=12:00, recurrence=daily)。
+6. **创建笔记时禁止添油加醋**：用户说「记一下：今天买了苹果」→ content="今天买了苹果"（只修正错别字和格式），**不要**扩展成「今天买了苹果，苹果富含维生素…」之类的废话。你只是帮用户整理，不是代用户写作。
+7. 只输出 JSON，不要 markdown 代码块。"""
 
 _MAX_AGENT_ITERATIONS = 5  # agent 循环最大迭代次数
 
@@ -260,11 +263,12 @@ def _action_label(step: dict) -> str:
     name_part = f"「{name}」" if name else ""
     labels: dict[str, str] = {
         "create_note": f"创建笔记{name_part}",
-        "create_event": f"创建日程{name_part}",
+        "create_appointment": f"创建安排{name_part}",
+        "create_alarm": f"创建闹钟{name_part}",
         "append_note": f"补充内容到{name_part or '笔记'}",
-        "set_reminder": f"设置提醒{name_part}",
-        "cancel_reminder": f"取消提醒{name_part}",
-        "update_schedule": f"调整日程{name_part}",
+        "update_appointment": f"调整安排{name_part}",
+        "update_alarm": f"调整闹钟{name_part}",
+        "delete_alarm": f"删除闹钟{name_part}",
         "save_place": f"保存地点{name_part}",
         "create_folder": f"创建文件夹{name_part}",
         "rename": f"重命名{name_part}",

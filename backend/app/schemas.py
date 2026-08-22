@@ -21,11 +21,12 @@ class FolderUpdate(BaseModel):
 
 
 class FileCreate(BaseModel):
+    """创建笔记（普通文件）。"""
+
     name: str
     content: str
     parent_id: str
-    type: str = "note"  # "note" 或 "event"
-    schedule: Optional[dict] = None  # 日程属性 JSON：{"date","time","repeat"}
+    type: str = "note"  # 仅支持 "note"
 
 
 class FileUpdate(BaseModel):
@@ -47,16 +48,40 @@ class ReorderRequest(BaseModel):
     target_id: str
 
 
-class ScheduleUpdate(BaseModel):
-    """日程属性更新（None 表示不改动）。"""
-    date: Optional[str] = None            # YYYY-MM-DD
-    time: Optional[str] = None            # HH:MM
-    reminder_minutes: Optional[int] = None  # 0 表示取消提醒
-    recurrence: Optional[str] = None      # ""/daily/weekly/monthly
-    recurrence_end_date: Optional[str] = None
-    repeat_enabled: Optional[bool] = None
-    repeat_unit: Optional[str] = None     # seconds/minutes/hours/days
-    repeat_value: Optional[int] = None
+class AppointmentCreate(BaseModel):
+    """创建安排（一次性日程）。"""
+
+    name: str
+    date: str          # YYYY-MM-DD
+    time: str = ""     # HH:MM 或空
+    content: str = ""
+
+
+class AppointmentUpdate(BaseModel):
+    """更新安排（None 表示不改动）。"""
+
+    name: Optional[str] = None
+    date: Optional[str] = None
+    time: Optional[str] = None
+    content: Optional[str] = None
+
+
+class AlarmCreate(BaseModel):
+    """创建闹钟（周期性提醒）。"""
+
+    name: str
+    time: str                       # HH:MM 触发时间
+    recurrence: str = "daily"       # daily/weekly/monthly
+    content: str = ""
+
+
+class AlarmUpdate(BaseModel):
+    """更新闹钟（None 表示不改动）。"""
+
+    name: Optional[str] = None
+    time: Optional[str] = None
+    recurrence: Optional[str] = None
+    content: Optional[str] = None
 
 
 class NoteCreate(BaseModel):
@@ -66,7 +91,7 @@ class NoteCreate(BaseModel):
 
 class CommandRequest(BaseModel):
     text: str
-    target_file_id: str | None = None  # 可选：当前编辑的目标文件 id（从笔记详情页发起的语音编辑）
+    target_file_id: str | None = None  # 可选：当前编辑的目标文件 id
 
 
 class ConfirmRequest(BaseModel):
@@ -129,14 +154,11 @@ class FileMetaResponse(BaseModel):
 
     id: str
     name: str
-    parent_id: str
-    type: str = "note"  # "note" 或 "event"
-    date: str = ""      # 仅 event 类型有值 YYYY-MM-DD
-    time: str = ""      # 仅 event 类型有值 HH:MM
-    reminder_minutes: Optional[int] = None
-    recurrence: Optional[str] = None  # null/""=一次性，"daily"/"weekly"/"monthly"
-    recurrence_end_date: Optional[str] = None  # 周期结束日期
-    schedule: Optional[str] = None  # 日程属性 JSON 字符串
+    parent_id: Optional[str] = None
+    type: str = "note"  # "note" | "appointment" | "alarm"
+    date: str = ""      # 仅 appointment 有值 YYYY-MM-DD
+    time: str = ""      # appointment=开始时间；alarm=周期触发时间 HH:MM
+    recurrence: Optional[str] = None  # 仅 alarm：""/daily/weekly/monthly
     created_at: str
     updated_at: str
 
@@ -147,27 +169,24 @@ class FileResponse(BaseModel):
     id: str
     name: str
     content: str
-    parent_id: str
+    parent_id: Optional[str] = None
     type: str = "note"
     date: str = ""
     time: str = ""
-    reminder_minutes: Optional[int] = None
     recurrence: Optional[str] = None
-    recurrence_end_date: Optional[str] = None
-    schedule: Optional[str] = None  # 日程属性 JSON 字符串
     created_at: str
     updated_at: str
 
 
 class MonthSummaryItem(BaseModel):
-    """某日日程数量（用于日历标记）。"""
+    """某日安排数量（用于日历标记）。"""
 
     date: str
     count: int
 
 
 class FolderTreeNode(BaseModel):
-    """目录树节点：文件夹信息 + 子文件夹 + 子文件。"""
+    """目录树节点：文件夹信息 + 子文件夹 + 子文件（仅笔记）。"""
 
     id: str
     name: str

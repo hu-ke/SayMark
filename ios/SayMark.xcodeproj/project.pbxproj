@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		077821D4DAD105FC5D55F831 /* APIResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 534CC3857ABACD6BFE3E66D7 /* APIResponse.swift */; };
 		08321E07222430C5E9865953 /* NoteViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4E11FF51E485892D46416D5 /* NoteViewModel.swift */; };
+		0D08AAA8B3C3CCC31C68061A /* Alarm.swift in Sources */ = {isa = PBXBuildFile; fileRef = E063CC96A6502FC43104DFFB /* Alarm.swift */; };
 		0E64FD8EF3DDA32C87734AF2 /* NewItemSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FCDBAACBD2E906F961A3316 /* NewItemSheet.swift */; };
 		138575BC3E0A73D60E058414 /* NoteFile.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6C5D5E150B8A589F5E86285 /* NoteFile.swift */; };
 		280AF87DA00D24BA0E04BFA0 /* FileDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6E93B02CE6559CB2B99C737 /* FileDetailView.swift */; };
@@ -17,22 +18,23 @@
 		39F89E534DC36A62E2930D57 /* SpeechRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = D555133413D382A2720F3DC3 /* SpeechRecognizer.swift */; };
 		3E01B7BE03EC2503C7BAADA6 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E72CC8D2ED3840D81D89A68 /* SettingsView.swift */; };
 		414DB19B05F096E7AF7FDB85 /* FolderTreeViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2F7AEFF0E1C1CF1FBEA0C57 /* FolderTreeViewModel.swift */; };
+		46B7D9668F2E2C3F9D5F1901 /* AppointmentsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5A1E12CDE4699CE6395B467 /* AppointmentsView.swift */; };
 		48CE263A8ADF77CE19E82BAC /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A8A17801F3EFFE675F603CE /* ChatView.swift */; };
 		4A29B2FDA476FE11A0B22B3B /* UIConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2460D4B55DA617B1BC4B8181 /* UIConstants.swift */; };
 		4E96350B519C268FA156AF77 /* ChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BD21175AA5F12E2044D391E /* ChatViewModel.swift */; };
 		52ECBD1481187AE241DCF3DC /* Speech.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7BEA7654F80B00F2E299528E /* Speech.framework */; };
-		5A6BCB2A0F0154D996E98403 /* CalendarEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AEAE6EC4816820E59CB107F /* CalendarEvent.swift */; };
 		5D3B6DB8204DAEF7EB40E8BF /* SayMarkApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26CB68B600C2C97B1F527BD7 /* SayMarkApp.swift */; };
-		63647D2888C466BDA2A54AE7 /* RemindersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10D8ABDA6AA421E724CAFA7A /* RemindersView.swift */; };
 		6A4580CCA890D7AB1E79E0B8 /* DeviceID.swift in Sources */ = {isa = PBXBuildFile; fileRef = 164790EF45F22BF2EE0BDF4C /* DeviceID.swift */; };
 		7A1A43B96E884C8B0CD450F5 /* AVFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A9A25F1E37A1132E151AB815 /* AVFoundation.framework */; };
 		801032D12F7B05C048103F42 /* FolderTreeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43CF3E21C3E5B6A8894B7FCF /* FolderTreeView.swift */; };
+		90196DEC7CA6C282DA9535AF /* AlarmsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7B3AF19BABDA16B944F7EEC /* AlarmsView.swift */; };
 		93F114A86FD2264DDE7F3364 /* CommandInputView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87B8EE13F86150EC6154F854 /* CommandInputView.swift */; };
 		9586C12AC4104279C8C1EB77 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78D535DE97CFB3E5EAD25013 /* RootView.swift */; };
 		976E757D0845ED579F33FEE0 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 099E35E2057B6628935FADBA /* APIClient.swift */; };
 		9D42442C2124ECB19429775A /* CalendarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B59D25B1E1F2199DBDCE880C /* CalendarView.swift */; };
 		A13B79469543BFFCD8FD1C2E /* FileRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF43A400AD413C7D8F99F647 /* FileRowView.swift */; };
 		A39DAAB1DE80E554BEB7406A /* RenameSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD6A795B59A8165D2D98B1C5 /* RenameSheet.swift */; };
+		C83A658818DAC17DF2BACBB9 /* Appointment.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDDDC38C99A8B0C294293F99 /* Appointment.swift */; };
 		D2057C01771E6E2AEFE11932 /* LocationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7609482D938B08A69129023D /* LocationManager.swift */; };
 		DA89DC1AEF71CB821D115667 /* Folder.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA85CA260FA3DB7EC67B9F87 /* Folder.swift */; };
 		DEC9C7851A56D5466A88FC00 /* NotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81F00714D23B58052A7F06BD /* NotificationManager.swift */; };
@@ -40,9 +42,7 @@
 
 /* Begin PBXFileReference section */
 		099E35E2057B6628935FADBA /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
-		0AEAE6EC4816820E59CB107F /* CalendarEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarEvent.swift; sourceTree = "<group>"; };
 		0FCDBAACBD2E906F961A3316 /* NewItemSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewItemSheet.swift; sourceTree = "<group>"; };
-		10D8ABDA6AA421E724CAFA7A /* RemindersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemindersView.swift; sourceTree = "<group>"; };
 		164790EF45F22BF2EE0BDF4C /* DeviceID.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceID.swift; sourceTree = "<group>"; };
 		1E72CC8D2ED3840D81D89A68 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		2460D4B55DA617B1BC4B8181 /* UIConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UIConstants.swift; sourceTree = "<group>"; };
@@ -59,15 +59,19 @@
 		87B8EE13F86150EC6154F854 /* CommandInputView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandInputView.swift; sourceTree = "<group>"; };
 		A9A25F1E37A1132E151AB815 /* AVFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVFoundation.framework; path = System/Library/Frameworks/AVFoundation.framework; sourceTree = SDKROOT; };
 		B59D25B1E1F2199DBDCE880C /* CalendarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarView.swift; sourceTree = "<group>"; };
-		BB4A4C0AC8816F24E4876B38 /* SayMark.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SayMark.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		BB4A4C0AC8816F24E4876B38 /* SayMark.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = SayMark.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C4E11FF51E485892D46416D5 /* NoteViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteViewModel.swift; sourceTree = "<group>"; };
+		C7B3AF19BABDA16B944F7EEC /* AlarmsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlarmsView.swift; sourceTree = "<group>"; };
 		CA85CA260FA3DB7EC67B9F87 /* Folder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Folder.swift; sourceTree = "<group>"; };
 		CD6A795B59A8165D2D98B1C5 /* RenameSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RenameSheet.swift; sourceTree = "<group>"; };
 		D555133413D382A2720F3DC3 /* SpeechRecognizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechRecognizer.swift; sourceTree = "<group>"; };
 		D6E93B02CE6559CB2B99C737 /* FileDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileDetailView.swift; sourceTree = "<group>"; };
 		DD61E5389B76681453EA71E2 /* FolderRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolderRowView.swift; sourceTree = "<group>"; };
+		E063CC96A6502FC43104DFFB /* Alarm.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Alarm.swift; sourceTree = "<group>"; };
 		E2F7AEFF0E1C1CF1FBEA0C57 /* FolderTreeViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolderTreeViewModel.swift; sourceTree = "<group>"; };
+		EDDDC38C99A8B0C294293F99 /* Appointment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Appointment.swift; sourceTree = "<group>"; };
 		EF43A400AD413C7D8F99F647 /* FileRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileRowView.swift; sourceTree = "<group>"; };
+		F5A1E12CDE4699CE6395B467 /* AppointmentsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppointmentsView.swift; sourceTree = "<group>"; };
 		F6C5D5E150B8A589F5E86285 /* NoteFile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteFile.swift; sourceTree = "<group>"; };
 		FC8E563450A1B027FF2C4603 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -88,8 +92,9 @@
 		10867841005AC8DA2F1E2004 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				E063CC96A6502FC43104DFFB /* Alarm.swift */,
 				534CC3857ABACD6BFE3E66D7 /* APIResponse.swift */,
-				0AEAE6EC4816820E59CB107F /* CalendarEvent.swift */,
+				EDDDC38C99A8B0C294293F99 /* Appointment.swift */,
 				CA85CA260FA3DB7EC67B9F87 /* Folder.swift */,
 				F6C5D5E150B8A589F5E86285 /* NoteFile.swift */,
 			);
@@ -122,6 +127,8 @@
 		664F6282D8285F39FF6347DE /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				C7B3AF19BABDA16B944F7EEC /* AlarmsView.swift */,
+				F5A1E12CDE4699CE6395B467 /* AppointmentsView.swift */,
 				B59D25B1E1F2199DBDCE880C /* CalendarView.swift */,
 				3A8A17801F3EFFE675F603CE /* ChatView.swift */,
 				87B8EE13F86150EC6154F854 /* CommandInputView.swift */,
@@ -130,7 +137,6 @@
 				DD61E5389B76681453EA71E2 /* FolderRowView.swift */,
 				43CF3E21C3E5B6A8894B7FCF /* FolderTreeView.swift */,
 				0FCDBAACBD2E906F961A3316 /* NewItemSheet.swift */,
-				10D8ABDA6AA421E724CAFA7A /* RemindersView.swift */,
 				CD6A795B59A8165D2D98B1C5 /* RenameSheet.swift */,
 				78D535DE97CFB3E5EAD25013 /* RootView.swift */,
 				1E72CC8D2ED3840D81D89A68 /* SettingsView.swift */,
@@ -231,6 +237,8 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+				};
 			};
 			buildConfigurationList = CE040C44EFD0B9EDE8741846 /* Build configuration list for PBXProject "SayMark" */;
 			developmentRegion = en;
@@ -258,8 +266,11 @@
 			files = (
 				976E757D0845ED579F33FEE0 /* APIClient.swift in Sources */,
 				077821D4DAD105FC5D55F831 /* APIResponse.swift in Sources */,
+				0D08AAA8B3C3CCC31C68061A /* Alarm.swift in Sources */,
+				90196DEC7CA6C282DA9535AF /* AlarmsView.swift in Sources */,
 				2825E1D69940380CF9B0D2E6 /* AppConfig.swift in Sources */,
-				5A6BCB2A0F0154D996E98403 /* CalendarEvent.swift in Sources */,
+				C83A658818DAC17DF2BACBB9 /* Appointment.swift in Sources */,
+				46B7D9668F2E2C3F9D5F1901 /* AppointmentsView.swift in Sources */,
 				9D42442C2124ECB19429775A /* CalendarView.swift in Sources */,
 				48CE263A8ADF77CE19E82BAC /* ChatView.swift in Sources */,
 				4E96350B519C268FA156AF77 /* ChatViewModel.swift in Sources */,
@@ -276,7 +287,6 @@
 				138575BC3E0A73D60E058414 /* NoteFile.swift in Sources */,
 				08321E07222430C5E9865953 /* NoteViewModel.swift in Sources */,
 				DEC9C7851A56D5466A88FC00 /* NotificationManager.swift in Sources */,
-				63647D2888C466BDA2A54AE7 /* RemindersView.swift in Sources */,
 				A39DAAB1DE80E554BEB7406A /* RenameSheet.swift in Sources */,
 				9586C12AC4104279C8C1EB77 /* RootView.swift in Sources */,
 				5D3B6DB8204DAEF7EB40E8BF /* SayMarkApp.swift in Sources */,
@@ -352,7 +362,6 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_LANGUAGE = "zh-Hans";
-				DEVELOPMENT_TEAM = 7AEU9RWVS5;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = SayMark/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -436,7 +445,6 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_LANGUAGE = "zh-Hans";
-				DEVELOPMENT_TEAM = 7AEU9RWVS5;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = SayMark/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (

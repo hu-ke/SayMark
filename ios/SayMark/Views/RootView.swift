@@ -17,7 +17,6 @@ enum RecordingResult {
 struct RootView: View {
     @StateObject private var viewModel = FolderTreeViewModel()
     @StateObject private var chatViewModel = ChatViewModel()
-    @StateObject private var remindersViewModel = RemindersViewModel()
     @State private var locateFolderId: String?
     @State private var selectedTab = 0
 
@@ -49,8 +48,10 @@ struct RootView: View {
                     case 1:
                         CalendarView(treeViewModel: viewModel)
                     case 2:
-                        RemindersView(viewModel: remindersViewModel)
+                        AppointmentsView(treeViewModel: viewModel)
                     case 3:
+                        AlarmsView(treeViewModel: viewModel)
+                    case 4:
                         SettingsView()
                     default:
                         EmptyView()
@@ -110,9 +111,6 @@ struct RootView: View {
             // 每次切回「文件」列表页都刷新目录树，保证聊天/其它操作后的增删改及时可见
             if newTab == 0 {
                 Task { await viewModel.loadTree() }
-            } else if newTab == 2 {
-                // 切到「提醒」页时刷新，保证语音/其它操作新建的提醒即时可见
-                Task { await remindersViewModel.load() }
             }
         }
         .task {
@@ -136,9 +134,7 @@ struct RootView: View {
             }
             let granted = await NotificationManager.shared.requestPermission()
             if granted {
-                if let notes = try? await APIClient.shared.getReminderNotes() {
-                    await NotificationManager.shared.scheduleNotifications(from: notes)
-                }
+                await NotificationManager.shared.refreshFromServer()
             }
         }
     }
@@ -184,10 +180,9 @@ struct RootView: View {
             showChat = false
         }
         pendingMessage = nil
-        // 关闭聊天返回列表页时刷新目录树（聊天中可能增删改了笔记/日程）
+        // 关闭聊天返回列表页时刷新目录树与通知（聊天中可能增删改了笔记/安排/闹钟）
         Task { await viewModel.loadTree() }
-        // 同步刷新提醒页数据（聊天中可能新建了日程提醒）
-        Task { await remindersViewModel.load() }
+        Task { await NotificationManager.shared.refreshFromServer() }
     }
 }
 

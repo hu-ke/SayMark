@@ -2,13 +2,13 @@ import SwiftUI
 
 struct CalendarView: View {
     @ObservedObject var treeViewModel: FolderTreeViewModel
-    @StateObject private var viewModel = CalendarEventViewModel()
+    @StateObject private var viewModel = AppointmentViewModel()
 
     @State private var selectedDay: Int?
     @State private var currentMonth: Date = Calendar.current.startOfMonth(for: Date()) ?? Date()
     @State private var showDeleteAlert = false
-    @State private var deleteEventId: String?
-    @State private var deleteEventTitle: String?
+    @State private var deleteAppointmentId: String?
+    @State private var deleteAppointmentTitle: String?
 
     // MARK: - Weekday labels
     private let weekDays = ["一", "二", "三", "四", "五", "六", "日"]
@@ -105,8 +105,8 @@ struct CalendarView: View {
                 // 分隔线
                 HDSeparator()
 
-                // 事件列表
-                if let day = selectedDay, !viewModel.dayEvents.isEmpty {
+                // 安排列表
+                if let day = selectedDay, !viewModel.dayAppointments.isEmpty {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 0) {
                             HStack {
@@ -119,8 +119,8 @@ struct CalendarView: View {
                             .padding(.vertical, 12)
 
                             VStack(spacing: 10) {
-                                ForEach(viewModel.dayEvents) { event in
-                                    eventRow(event: event)
+                                ForEach(viewModel.dayAppointments) { appointment in
+                                    appointmentRow(appointment: appointment)
                                 }
                             }
                             .padding(.horizontal, 16)
@@ -129,10 +129,10 @@ struct CalendarView: View {
                         }
                     }
                     .background(UIConstants.background)
-                } else if selectedDay != nil && viewModel.dayEvents.isEmpty {
+                } else if selectedDay != nil && viewModel.dayAppointments.isEmpty {
                     VStack {
                         Spacer()
-                        Text("暂无日程")
+                        Text("暂无安排")
                             .font(.system(size: 15))
                             .foregroundColor(UIConstants.label3)
                         Spacer()
@@ -150,14 +150,14 @@ struct CalendarView: View {
         }
         .confirmationDialog("确定删除", isPresented: $showDeleteAlert) {
             Button("删除", role: .destructive) {
-                if let id = deleteEventId {
-                    Task { await viewModel.deleteEvent(eventId: id) }
+                if let id = deleteAppointmentId {
+                    Task { await viewModel.deleteAppointment(id: id) }
                 }
             }
             Button("取消", role: .cancel) {}
         } message: {
-            if let title = deleteEventTitle {
-                Text("将删除日程「\(title)」。")
+            if let title = deleteAppointmentTitle {
+                Text("将删除安排「\(title)」。")
             }
         }
     }
@@ -168,7 +168,7 @@ struct CalendarView: View {
         let today = Calendar.current.isDateInToday(dayDate)
         let isPast = !today && dayDate < Calendar.current.startOfDay(for: Date())
         let isSelected = day == selectedDay
-        let hasEvent = viewModel.eventDays.contains(day)
+        let hasAppointment = viewModel.appointmentDays.contains(day)
 
         return VStack(spacing: 3) {
             Button {
@@ -202,7 +202,7 @@ struct CalendarView: View {
                     )
             }
 
-            if hasEvent && !isSelected {
+            if hasAppointment && !isSelected {
                 Circle()
                     .fill(UIConstants.orange)
                     .frame(width: 5, height: 5)
@@ -213,10 +213,10 @@ struct CalendarView: View {
         .frame(height: 44)
     }
 
-    // MARK: - Event Row
-    private func eventRow(event: CalendarEvent) -> some View {
+    // MARK: - Appointment Row
+    private func appointmentRow(appointment: Appointment) -> some View {
         NavigationLink {
-            FileDetailView(fileId: event.id, fileName: event.title, folderTreeViewModel: treeViewModel)
+            FileDetailView(fileId: appointment.id, fileName: appointment.name, folderTreeViewModel: treeViewModel)
         } label: {
             HStack(alignment: .top, spacing: 12) {
                 RoundedRectangle(cornerRadius: 2)
@@ -225,19 +225,19 @@ struct CalendarView: View {
 
                 VStack(alignment: .leading, spacing: 3) {
                     HStack {
-                        Text(event.title)
+                        Text(appointment.name)
                             .font(.system(size: 16, weight: .medium))
                             .foregroundColor(UIConstants.label)
                             .kerning(-0.32)
                         Spacer()
-                        if !event.time.isEmpty {
-                            Text(formatEventTime(event.time))
+                        if !appointment.time.isEmpty {
+                            Text(appointment.timeDisplay)
                                 .font(.system(size: 13, weight: .medium))
                                 .foregroundColor(UIConstants.blue)
                         }
                     }
-                    if !event.content.isEmpty {
-                        Text(event.content)
+                    if !appointment.content.isEmpty {
+                        Text(appointment.content)
                             .font(.system(size: 13))
                             .foregroundColor(UIConstants.label3)
                             .lineLimit(2)
@@ -253,8 +253,8 @@ struct CalendarView: View {
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .swipeActions(edge: .trailing) {
             Button(role: .destructive) {
-                deleteEventId = event.id
-                deleteEventTitle = event.title
+                deleteAppointmentId = appointment.id
+                deleteAppointmentTitle = appointment.name
                 showDeleteAlert = true
             } label: {
                 Label("删除", systemImage: "trash")
@@ -302,17 +302,6 @@ struct CalendarView: View {
 
         return result
     }
-
-    private func formatEventTime(_ time: String) -> String {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let date = formatter.date(from: time)
-            ?? ISO8601DateFormatter().date(from: time)
-            ?? Date()
-        let f = DateFormatter()
-        f.dateFormat = "HH:mm"
-        return f.string(from: date)
-    }
 }
 
 // MARK: - Calendar Start of Month Extension
@@ -323,16 +312,16 @@ extension Calendar {
     }
 }
 
-// MARK: - Calendar Event ViewModel
+// MARK: - Appointment ViewModel
 @MainActor
-class CalendarEventViewModel: ObservableObject {
-    @Published var eventDays: Set<Int> = []
-    @Published var dayEvents: [CalendarEvent] = []
+class AppointmentViewModel: ObservableObject {
+    @Published var appointmentDays: Set<Int> = []
+    @Published var dayAppointments: [Appointment] = []
 
     func loadMonth(year: Int, month: Int) async {
         do {
             let summary: [MonthSummaryItem] = try await APIClient.shared.getMonthSummary(year: year, month: month)
-            eventDays = Set(summary.compactMap {
+            appointmentDays = Set(summary.compactMap {
                 Calendar.current.dateComponents([.day], from: isoToDate($0.date)).day
             })
         } catch {
@@ -343,20 +332,21 @@ class CalendarEventViewModel: ObservableObject {
     func loadDay(year: Int, month: Int, day: Int) async {
         do {
             let dateStr = String(format: "%04d-%02d-%02d", year, month, day)
-            let events: [CalendarEvent] = try await APIClient.shared.getEventsByDate(dateStr)
-            dayEvents = events
+            let appointments: [Appointment] = try await APIClient.shared.getAppointmentsByDate(dateStr)
+            dayAppointments = appointments
         } catch {
             print("loadDay error:", error)
-            dayEvents = []
+            dayAppointments = []
         }
     }
 
-    func deleteEvent(eventId: String) async {
+    func deleteAppointment(id: String) async {
         do {
-            try await APIClient.shared.deleteEvent(id: eventId)
-            dayEvents.removeAll(where: { $0.id == eventId })
+            try await APIClient.shared.deleteAppointment(id: id)
+            dayAppointments.removeAll(where: { $0.id == id })
+            await NotificationManager.shared.refreshFromServer()
         } catch {
-            print("deleteEvent error:", error)
+            print("deleteAppointment error:", error)
         }
     }
 

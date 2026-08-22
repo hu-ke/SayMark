@@ -3,10 +3,11 @@
 PostgreSQL 数据访问层，提供所有读写操作。
 """
 
-import json
 import re
 from datetime import datetime, timezone
 from typing import Optional
+
+from loguru import logger
 
 from . import pg_db
 
@@ -41,38 +42,75 @@ async def run_safe_query(sql: str) -> list[dict]:
     return await pg_db.fetch(clean)
 
 
-_HAS_SCHEDULE = False
 _HAS_POSITION = False
 
 
 async def ensure_schema() -> None:
-    """检测新增列是否存在（不执行 ALTER，避免非 owner 用户权限不足）。
-
-    缺失时相关功能自动降级：列表按 created_at 排序、禁用位置交换。
-    """
-    global _HAS_SCHEDULE, _HAS_POSITION
+    """启动时补齐必要结构（position 列、files.type 列宽与 CHECK）。"""
+    global _HAS_POSITION
     rows = await pg_db.fetch(
         "SELECT table_name, column_name FROM information_schema.columns "
-        "WHERE (table_name = 'files' AND column_name IN ('schedule', 'position')) "
+        "WHERE (table_name = 'files' AND column_name = 'position') "
         "   OR (table_name = 'folders' AND column_name = 'position')"
-    )
-    _HAS_SCHEDULE = any(
-        r["table_name"] == "files" and r["column_name"] == "schedule" for r in rows
     )
     _HAS_POSITION = (
         any(r["table_name"] == "files" and r["column_name"] == "position" for r in rows)
         and any(r["table_name"] == "folders" and r["column_name"] == "position" for r in rows)
     )
+    await _migrate_files_type()
+
+
+async def _migrate_files_type() -> None:
+    """把 files.type 加宽到 VARCHAR(20) 并更新 CHECK（支持 appointment/alarm）。
+
+    早期库的 type 列是 VARCHAR(10)，装不下 'appointment'（11 字符）。这里自动迁移，
+    避免用户手动执行 setup_pg.sql。若当前账号无 DDL 权限（如非表 owner），则记录
+    告警并跳过；此时需由数据库所有者手动执行 setup_pg.sql 或授予该表 owner 权限。
+    """
+    try:
+        row = await pg_db.fetchrow(
+            "SELECT character_maximum_length FROM information_schema.columns "
+            "WHERE table_name='files' AND column_name='type'"
+        )
+        length = (row or {}).get("character_maximum_length")
+        if length is not None and int(length) >= 20:
+            return  # 列已够宽，无需迁移
+    except Exception as e:
+        logger.warning(f"检查 files.type 列宽失败：{e}")
+        return
+
+    logger.warning("files.type 列宽不足，尝试自动迁移为 VARCHAR(20)")
+
+    # 迁移顺序：先去掉旧 CHECK，加宽列，再转换旧数据，最后加新 CHECK
+    try:
+        await pg_db.execute("ALTER TABLE files DROP CONSTRAINT IF EXISTS files_type_check")
+    except Exception as e:
+        logger.warning(f"删除 files_type_check 约束失败：{e}")
+    try:
+        await pg_db.execute("ALTER TABLE files ALTER COLUMN type TYPE VARCHAR(20)")
+    except Exception as e:
+        logger.warning(f"加宽 files.type 列失败：{e}")
+    try:
+        await pg_db.execute("UPDATE files SET type='appointment' WHERE type='event'")
+    except Exception as e:
+        logger.warning(f"迁移 type='event' -> 'appointment' 失败：{e}")
+    try:
+        await pg_db.execute(
+            "UPDATE files SET type='alarm' WHERE type='appointment' AND recurrence IS NOT NULL AND recurrence <> ''"
+        )
+    except Exception as e:
+        logger.warning(f"迁移 type -> 'alarm' 失败：{e}")
+    try:
+        await pg_db.execute(
+            "ALTER TABLE files ADD CONSTRAINT files_type_check CHECK (type IN ('note','appointment','alarm')) NOT VALID"
+        )
+    except Exception as e:
+        logger.warning(f"新增 files_type_check 约束失败：{e}")
 
 
 def _position_order() -> str:
     """返回排序子句，缺失 position 列时退回 created_at。"""
     return "position, created_at" if _HAS_POSITION else "created_at"
-
-
-def _schedule_col() -> str:
-    """返回 schedule 列片段，缺失该列时返回空串。"""
-    return ", schedule" if _HAS_SCHEDULE else ""
 
 
 # ----------------------------- 文件夹 -----------------------------
@@ -122,8 +160,8 @@ async def list_children(folder_id: int) -> dict:
         f"SELECT id, name, parent_id, created_at, updated_at FROM folders WHERE parent_id=$1 ORDER BY {order}", folder_id
     )
     files = await pg_db.fetch(
-        'SELECT id, name, type, date, "time", reminder_minutes, recurrence, recurrence_end_date, created_at, updated_at'
-        f"{_schedule_col()} FROM files WHERE parent_id=$1 ORDER BY {order}", folder_id
+        'SELECT id, name, parent_id, type, date, "time", recurrence, created_at, updated_at'
+        f" FROM files WHERE parent_id=$1 AND type='note' ORDER BY {order}", folder_id
     )
     return {"folders": folders, "files": files}
 
@@ -233,52 +271,35 @@ async def get_default_uncategorized_folder() -> dict:
 
 
 async def create_file(
-    name: str, content: str, parent_id: int,
+    name: str, content: str, parent_id: int | None,
     file_type: str = "note", date: str = "", time: str = "",
-    schedule: Optional[dict] = None,
+    recurrence: Optional[str] = None,
 ) -> dict:
-    parent_id = int(parent_id)
+    """创建文件。file_type: note | appointment | alarm。
+
+    note 需要 parent_id；appointment/alarm 的 parent_id 传 None（不归属文件夹）。
+    """
+    parent_id = int(parent_id) if parent_id is not None else None
     now = _now()
 
-    # 日程属性统一以 schedule JSON 为准（新创建入口）；老入口仍兼容 date/time/file_type 传参
-    if schedule is not None:
-        file_type = "event"
-        date = str(schedule.get("date") or date)
-        time = str(schedule.get("time") or time)
-        schedule_json = json.dumps(schedule, ensure_ascii=False)
-    elif file_type == "event":
-        schedule_json = json.dumps({
-            "date": date, "time": time,
-            "repeat": {"enabled": False, "unit": "", "value": 0},
-        }, ensure_ascii=False)
-    else:
-        schedule_json = ""
-
+    # 容错：date/time 可能带秒/时区（如 "13:00:00"、"2026-08-22T..."），截断为标准格式
+    date = (date or "")[:10]
+    time = (time or "")[:5]
     date_obj = datetime.strptime(date, "%Y-%m-%d").date() if date else None
     time_obj = datetime.strptime(time, "%H:%M").time() if time else None
+    recurrence = (recurrence or None) if file_type == "alarm" else None
 
-    if _HAS_SCHEDULE and _HAS_POSITION:
-        sql = """INSERT INTO files (name, content, parent_id, type, date, "time", schedule, position, created_at, updated_at)
+    if _HAS_POSITION:
+        sql = """INSERT INTO files (name, content, parent_id, type, date, "time", recurrence, position, created_at, updated_at)
                  VALUES ($1, $2, $3, $4, $5, $6, $7,
-                         COALESCE((SELECT MAX(position) + 1 FROM files WHERE parent_id = $3), 0), $8, $8)
+                         COALESCE((SELECT MAX(position) + 1 FROM files WHERE parent_id IS NOT DISTINCT FROM $3), 0), $8, $8)
                  RETURNING id"""
-        args = [name, content, parent_id, file_type, date_obj, time_obj, schedule_json, now]
-    elif _HAS_SCHEDULE:
-        sql = """INSERT INTO files (name, content, parent_id, type, date, "time", schedule, created_at, updated_at)
+        args = [name, content, parent_id, file_type, date_obj, time_obj, recurrence, now]
+    else:
+        sql = """INSERT INTO files (name, content, parent_id, type, date, "time", recurrence, created_at, updated_at)
                  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)
                  RETURNING id"""
-        args = [name, content, parent_id, file_type, date_obj, time_obj, schedule_json, now]
-    elif _HAS_POSITION:
-        sql = """INSERT INTO files (name, content, parent_id, type, date, "time", position, created_at, updated_at)
-                 VALUES ($1, $2, $3, $4, $5, $6,
-                         COALESCE((SELECT MAX(position) + 1 FROM files WHERE parent_id = $3), 0), $7, $7)
-                 RETURNING id"""
-        args = [name, content, parent_id, file_type, date_obj, time_obj, now]
-    else:
-        sql = """INSERT INTO files (name, content, parent_id, type, date, "time", created_at, updated_at)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $7)
-                 RETURNING id"""
-        args = [name, content, parent_id, file_type, date_obj, time_obj, now]
+        args = [name, content, parent_id, file_type, date_obj, time_obj, recurrence, now]
 
     result = await pg_db.execute(sql, *args)
     new_id = int(result.split()[-1])
@@ -287,10 +308,7 @@ async def create_file(
 
 async def get_file(file_id: int) -> dict | None:
     file_id = int(file_id)
-    if _HAS_SCHEDULE:
-        sql = 'SELECT id, name, content, parent_id, type, date, "time", reminder_minutes, recurrence, recurrence_end_date, schedule, created_at, updated_at FROM files WHERE id=$1'
-    else:
-        sql = 'SELECT id, name, content, parent_id, type, date, "time", reminder_minutes, recurrence, recurrence_end_date, created_at, updated_at FROM files WHERE id=$1'
+    sql = 'SELECT id, name, content, parent_id, type, date, "time", recurrence, created_at, updated_at FROM files WHERE id=$1'
     return await pg_db.fetchrow(sql, file_id)
 
 
@@ -328,45 +346,14 @@ async def delete_file(file_id: int) -> bool:
     return not r.endswith("0")
 
 
-async def set_reminder(file_id: int, minutes: int, recurrence: str = "", recurrence_end_date: str = "") -> dict | None:
-    """设置提醒。minutes >= 0：0 表示到点提醒（日程开始时刻），>0 表示提前 minutes 分钟。"""
-    file_id = int(file_id)
-    now = _now()
-    end_date_obj = datetime.strptime(recurrence_end_date, "%Y-%m-%d").date() if recurrence_end_date else None
-    r = await pg_db.execute(
-        "UPDATE files SET reminder_minutes=$1, recurrence=NULLIF($2,''), recurrence_end_date=$3, updated_at=$4 WHERE id=$5",
-        minutes, recurrence or None, end_date_obj, now, file_id,
-    )
-    if r.endswith("0"):
-        return None
-    return await get_file(file_id)
-
-
-async def clear_reminder(file_id: int) -> dict | None:
-    """取消提醒（将提醒字段置空）。"""
-    file_id = int(file_id)
-    now = _now()
-    r = await pg_db.execute(
-        "UPDATE files SET reminder_minutes=NULL, recurrence=NULL, recurrence_end_date=NULL, updated_at=$1 WHERE id=$2",
-        now, file_id,
-    )
-    if r.endswith("0"):
-        return None
-    return await get_file(file_id)
-
-
-async def update_file_schedule(
+async def update_appointment(
     file_id: int,
+    name: Optional[str] = None,
     date: Optional[str] = None,
     time: Optional[str] = None,
-    reminder_minutes: Optional[int] = None,
-    recurrence: Optional[str] = None,
-    recurrence_end_date: Optional[str] = None,
-    repeat_enabled: Optional[bool] = None,
-    repeat_unit: Optional[str] = None,
-    repeat_value: Optional[int] = None,
+    content: Optional[str] = None,
 ) -> dict | None:
-    """更新日程属性（日期/时间/提醒/重复）。None 表示不改动。"""
+    """更新安排（一次性）。None 表示不改动。"""
     file_id = int(file_id)
     file = await get_file(file_id)
     if file is None:
@@ -374,71 +361,54 @@ async def update_file_schedule(
 
     now = _now()
 
-    def _to_str(v) -> str:
-        if v is None:
-            return ""
-        if hasattr(v, "isoformat"):
-            return v.isoformat()
-        return str(v)
+    new_name = name if name is not None else file.get("name")
+    new_content = content if content is not None else file.get("content")
 
-    existing_date = _to_str(file.get("date"))
-    existing_time = _to_str(file.get("time"))
-
-    new_date = date if date is not None else existing_date
-    new_time = time if time is not None else existing_time
-    # 只保留 YYYY-MM-DD / HH:MM（存储读取时可能带秒）
-    new_date = new_date[:10] if new_date else ""
-    new_time = new_time[:5] if new_time else ""
+    existing_date = str(file.get("date") or "")
+    existing_time = str(file.get("time") or "")
+    new_date = (str(date)[:10] if date else "") if date is not None else existing_date[:10]
+    new_time = (str(time)[:5] if time else "") if time is not None else existing_time[:5]
 
     date_obj = datetime.strptime(new_date, "%Y-%m-%d").date() if new_date else None
     time_obj = datetime.strptime(new_time, "%H:%M").time() if new_time else None
 
-    if reminder_minutes is not None:
-        new_reminder = None if reminder_minutes <= 0 else reminder_minutes
-    else:
-        new_reminder = file.get("reminder_minutes")
+    r = await pg_db.execute(
+        'UPDATE files SET name=$1, content=$2, date=$3, "time"=$4, updated_at=$5 WHERE id=$6',
+        new_name, new_content, date_obj, time_obj, now, file_id,
+    )
+    if r.endswith("0"):
+        return None
+    return await get_file(file_id)
 
-    if recurrence is not None:
-        new_recurrence = recurrence or None
-    else:
-        new_recurrence = file.get("recurrence")
 
-    existing_end_date = _to_str(file.get("recurrence_end_date"))
-    new_end_date = recurrence_end_date if recurrence_end_date is not None else existing_end_date
-    new_end_date = new_end_date[:10] if new_end_date else None
-    end_date_obj = datetime.strptime(new_end_date, "%Y-%m-%d").date() if new_end_date else None
+async def update_alarm(
+    file_id: int,
+    name: Optional[str] = None,
+    time: Optional[str] = None,
+    recurrence: Optional[str] = None,
+    content: Optional[str] = None,
+) -> dict | None:
+    """更新闹钟（周期性）。None 表示不改动。"""
+    file_id = int(file_id)
+    file = await get_file(file_id)
+    if file is None:
+        return None
 
-    schedule_json = None
-    if _HAS_SCHEDULE:
-        schedule: dict = {}
-        raw = file.get("schedule")
-        if raw:
-            try:
-                schedule = json.loads(raw)
-            except Exception:
-                schedule = {}
-        schedule["date"] = new_date
-        schedule["time"] = new_time
-        rep = dict(schedule.get("repeat") or {})
-        if repeat_enabled is not None:
-            rep["enabled"] = bool(repeat_enabled)
-        if repeat_unit is not None:
-            rep["unit"] = repeat_unit
-        if repeat_value is not None:
-            rep["value"] = int(repeat_value)
-        schedule["repeat"] = rep
-        schedule_json = json.dumps(schedule, ensure_ascii=False)
+    now = _now()
 
-    if _HAS_SCHEDULE:
-        r = await pg_db.execute(
-            'UPDATE files SET date=$1, "time"=$2, reminder_minutes=$3, recurrence=$4, recurrence_end_date=$5, schedule=$6, updated_at=$7 WHERE id=$8',
-            date_obj, time_obj, new_reminder, new_recurrence, end_date_obj, schedule_json, now, file_id,
-        )
-    else:
-        r = await pg_db.execute(
-            'UPDATE files SET date=$1, "time"=$2, reminder_minutes=$3, recurrence=$4, recurrence_end_date=$5, updated_at=$6 WHERE id=$7',
-            date_obj, time_obj, new_reminder, new_recurrence, end_date_obj, now, file_id,
-        )
+    new_name = name if name is not None else file.get("name")
+    new_content = content if content is not None else file.get("content")
+
+    existing_time = str(file.get("time") or "")
+    new_time = (str(time)[:5] if time else "") if time is not None else existing_time[:5]
+    new_recurrence = (recurrence or None) if recurrence is not None else file.get("recurrence")
+
+    time_obj = datetime.strptime(new_time, "%H:%M").time() if new_time else None
+
+    r = await pg_db.execute(
+        'UPDATE files SET name=$1, content=$2, "time"=$3, recurrence=$4, updated_at=$5 WHERE id=$6',
+        new_name, new_content, time_obj, new_recurrence, now, file_id,
+    )
     if r.endswith("0"):
         return None
     return await get_file(file_id)
@@ -534,8 +504,8 @@ async def get_folder_tree() -> list[dict]:
     order = _position_order()
     folders = await pg_db.fetch(f"SELECT id, name, parent_id, created_at, updated_at FROM folders ORDER BY {order}")
     files = await pg_db.fetch(
-        'SELECT id, name, type, date, "time", reminder_minutes, recurrence, recurrence_end_date, created_at, updated_at, parent_id'
-        f"{_schedule_col()} FROM files ORDER BY {order}"
+        'SELECT id, name, parent_id, type, date, "time", recurrence, created_at, updated_at'
+        f" FROM files WHERE type='note' ORDER BY {order}"
     )
 
     folders_by_parent: dict = {}
@@ -638,29 +608,39 @@ async def find_folders_by_filter(f: dict, limit: int = 50) -> list[dict]:
     return await pg_db.fetch(query, *params)
 
 
-async def find_files_by_date(date: str) -> list[dict]:
-    """列出某天的事件（按 time 排序）。"""
-    target_date = datetime.strptime(date, "%Y-%m-%d").date()
+async def list_appointments() -> list[dict]:
+    """列出所有安排（按日期/时间排序）。"""
     return await pg_db.fetch(
-        'SELECT id, name, content, parent_id, type, date, "time", reminder_minutes, recurrence, recurrence_end_date, created_at, updated_at'
-        f"{_schedule_col()} FROM files WHERE type=$1 AND date=$2 ORDER BY \"time\"",
-        "event", target_date,
+        'SELECT id, name, content, parent_id, type, date, "time", recurrence, created_at, updated_at'
+        ' FROM files WHERE type=$1 ORDER BY date, "time"',
+        "appointment",
     )
 
 
-async def find_files_by_month(year: int, month: int) -> list[dict]:
-    """列出某月有事件的日期及数量。"""
+async def find_appointments_by_date(date: str) -> list[dict]:
+    """列出某天的安排（按 time 排序）。"""
+    target_date = datetime.strptime(date, "%Y-%m-%d").date()
+    return await pg_db.fetch(
+        'SELECT id, name, content, parent_id, type, date, "time", recurrence, created_at, updated_at'
+        ' FROM files WHERE type=$1 AND date=$2 ORDER BY "time"',
+        "appointment", target_date,
+    )
+
+
+async def find_appointments_by_month(year: int, month: int) -> list[dict]:
+    """列出某月有安排的日期及数量。"""
     prefix = f"{year:04d}-{month:02d}"
     rows = await pg_db.fetch(
-        "SELECT date, COUNT(*) AS count FROM files WHERE type='event' AND date::text LIKE $1 GROUP BY date ORDER BY date",
+        "SELECT date, COUNT(*) AS count FROM files WHERE type='appointment' AND date::text LIKE $1 GROUP BY date ORDER BY date",
         f"{prefix}%",
     )
     return [{"date": r["date"].isoformat() if hasattr(r["date"], "isoformat") else str(r["date"]), "count": r["count"]} for r in rows]
 
 
-async def find_files_with_reminders() -> list[dict]:
-    """列出所有有提醒的文件。"""
+async def list_alarms() -> list[dict]:
+    """列出所有闹钟（按触发时间排序）。"""
     return await pg_db.fetch(
-        'SELECT id, name, content, parent_id, type, date, "time", reminder_minutes, recurrence, recurrence_end_date, created_at, updated_at'
-        f"{_schedule_col()} FROM files WHERE reminder_minutes IS NOT NULL ORDER BY date"
+        'SELECT id, name, content, parent_id, type, date, "time", recurrence, created_at, updated_at'
+        ' FROM files WHERE type=$1 ORDER BY "time"',
+        "alarm",
     )

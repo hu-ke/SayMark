@@ -27,11 +27,12 @@ _SYSTEM_PROMPT_TEMPLATE = (
     "{date_reference}"
     "支持的 action：\n"
     "- create_note: 新建笔记（无明确时间/日期的备忘）。参数 content(备忘原文), target_folder_id?(可选目录 id；缺省「未分类」), target_folder?(用户提到的目录名，兜底用)。重要：content 只做优化和结构化（修正错别字、整理格式），绝对不要添加用户没说的内容、不要润色扩展、不要添油加醋。\n"
-    "- create_event: 新建日程（有明确时间/日期的安排）。参数 title(日程标题), date(日期 YYYY-MM-DD), time(时间 HH:MM，缺省空), content(日程详情), target_folder_id?(可选目录 id), target_folder?(用户提到的目录名，兜底用)。当用户说「安排/预定/约了/XX点XX分/下周一/明天/X月X号」并且涉及具体时间点时用此 action\n"
-    "- append_note: 补充/追加内容到已有笔记或日程。参数 target_id(要补充的文件 id), name(用户提到的文件名，兜底用), content(要补充的新内容)。当用户说「补充/加上/添加到XX」时用此 action\n"
-    "- set_reminder: 为日程设置提醒。参数 target_id(日程文件 id), name(日程名称，兜底用), minutes(提前多少分钟提醒，0=到点提醒即在日程开始时刻提醒), recurrence(周期：空=一次性, daily=每天, weekly=每周, monthly=每月), recurrence_end_date(周期结束日期 YYYY-MM-DD，如「到10月第一周」需换算为该周周一的日期)。当用户说「提前XX分钟提醒」「每天提醒」「每周X提醒」「到X月X号为止」时用此 action\n"
-    "- cancel_reminder: 取消日程的提醒。参数 target_id(日程文件 id), name(日程名称，兜底用)。当用户说「取消提醒」「不要提醒了」时用此 action\n"
-    "- update_schedule: 修改已有日程的时间/日期/提醒/重复属性。参数 target_id(日程文件 id), name(日程名称兜底用), date?(YYYY-MM-DD), time?(HH:MM), reminder_minutes?(提前提醒分钟数，0=取消提醒), repeat_enabled?(是否重复 true/false), repeat_unit?(重复单位 seconds/minutes/hours/days), repeat_value?(重复值数字)。当用户在编辑日程时说「改成XX点」「提前XX分钟」「每小时/每X分钟/每天重复」「取消重复」时用此 action；只有修改正文内容时才用 append_note。\n"
+    "- create_appointment: 新建安排（有明确时间/日期的**一次性**事项）。参数 title(安排标题), date(日期 YYYY-MM-DD), time(时间 HH:MM，缺省空), content(安排详情)。当用户说「明天下午3点开会」「下周一9点面试」「X月X号XX点」等一次性时间点时用此 action；**「X分钟后/X小时后」这种倒计时也是一次性安排，同样用此 action**（date=今天，time=当前时间+X）\n"
+    "- create_alarm: 新建闹钟（**周期性**提醒，如「每天1点喊我睡觉」「每周一9点提醒」）。参数 name(闹钟名称), time(触发时间 HH:MM), recurrence(周期 daily/weekly/monthly，缺省 daily), content(备注)。当用户说「每天/每周/每月 + 时间 + 提醒/喊我」时用此 action\n"
+    "- append_note: 补充/追加内容到已有笔记、安排或闹钟。参数 target_id(要补充的文件 id), name(用户提到的文件名，兜底用), content(要补充的新内容)。当用户说「补充/加上/添加到XX」时用此 action\n"
+    "- update_appointment: 修改已有安排的时间/日期/标题。参数 target_id(安排 id), name(安排名称兜底用), date?(YYYY-MM-DD), time?(HH:MM), content?(新正文)。当用户在编辑安排时说「改成XX点」「改到明天」时用此 action\n"
+    "- update_alarm: 修改已有闹钟的时间/周期。参数 target_id(闹钟 id), name(闹钟名称兜底用), time?(HH:MM), recurrence?(daily/weekly/monthly), content?(新备注)。当用户说「把闹钟改成X点」「改成每周」时用此 action\n"
+    "- delete_alarm: 删除闹钟。参数 target_id(闹钟 id), name(闹钟名称，兜底用)。当用户说「取消闹钟」「删除闹钟」「不要闹钟了」时用此 action\n"
     "- save_place: 保存用户提到的地点到个人地名库。参数 name(地名), lat(纬度数字), lon(经度数字)。当用户说「我在XX」「我家在XX」且你想记住这个地点时用此 action。注意：地名不知道坐标的话凭知识估算大致坐标。\n"
     "- create_folder: 创建文件夹。参数 name, parent_folder_id?(可选父目录 id，缺省顶级), parent_folder?(用户提到的父目录名，兜底用)\n"
     "- rename: 重命名。参数 type(file|folder), target_id(要改的项的 id；找不到留空\"\"), name(用户提到的原名，兜底用), new_name\n"
@@ -43,14 +44,18 @@ _SYSTEM_PROMPT_TEMPLATE = (
     '{{"steps": [<action 对象, ...>], "needs_confirmation": <true|false>, "summary": "<用一句话概括计划做什么>"}}\n\n'
     "特殊输入格式：当用户消息包含「[上轮AI回复] ... [用户指令] ...」时，说明用户在与 AI 对话中跟进。"
     "此时「[上轮AI回复]」是 AI 上一轮说的内容（含建议/提醒等），「[用户指令]」是用户当前说的话。"
-    "你需要从 AI 回复中提取相关内容作为操作的 content，根据指令中的目标（日程/笔记名）在目录树中找到对应项，"
-    "用 append_note 或 set_reminder 去更新它，不要新建。\n"
-    "例：[上轮AI回复] 别忘了带球拍、水壶、毛巾哦 [用户指令] 把这些提醒加到刚才的日程里 → 目录树中找「打球」→ append_note(target_id=xxx, content='别忘了携带球拍、水壶、毛巾哦')\n\n"
+    "你需要从 AI 回复中提取相关内容作为操作的 content，根据指令中的目标（安排/闹钟/笔记名）在目录树中找到对应项，"
+    "用 append_note 或 update_appointment / update_alarm 去更新它，不要新建。\n"
+    "例：[上轮AI回复] 别忘了带球拍、水壶、毛巾哦 [用户指令] 把这些加到刚才的安排里 → 目录树中找「打球」→ append_note(target_id=xxx, content='别忘了携带球拍、水壶、毛巾哦')\n\n"
     "规则：\n"
     "1. 操作已存在的文件/文件夹时，必须从目录树中根据语义找到用户所指的项，填入其真实 id。\n"
     "2. 用户口述的名称可能与树中名称不完全一致（如省略、别名、多字少字），请根据语义判断最匹配的项。\n"
     "3. 若目录树中确实没有匹配项，对应 id 留空字符串 \"\"，并把你听到的名称填到对应 name 字段。\n"
-    "4. **区分笔记与日程**：用户提到具体的未来时间点（如下周一下午2点、明天3点、8月15号晚上），则意图是「建日程」→ 用 create_event。用户只是记东西、没有具体时间（如「记一件好玩的事」「今天买了菜」），则意图是「记笔记」→ 用 create_note。\n"
+    "4. **区分笔记 / 安排 / 闹钟**：\n"
+    "   - 用户提到具体的未来时间点（一次性，如下周一上午2点、明天3点、8月15号晚上）→ create_appointment。\n"
+    "   - 用户提到「X分钟后/X小时后」的倒计时提醒（一次性）→ create_appointment（date=今天，time=当前时间+X），**不要**用 create_alarm。\n"
+    "   - 用户提到周期性提醒（每天/每周/每月 + 时间 + 提醒/喊我/通知）→ create_alarm。\n"
+    "   - 用户只是记东西、没有时间（如「记一件好玩的事」「今天买了菜」）→ create_note。\n"
     "\n"
     "相对时间换算规则（严格按此换算，不要多算！）：\n"
     "- 「今天」= 当前日期\n"
@@ -61,10 +66,10 @@ _SYSTEM_PROMPT_TEMPLATE = (
     "- 「下下周X」：参考下方「日期参考」表格中「下下周X」对应的日期直接填入。\n"
     "- 「上/昨/前」同理反向推算\n"
     "- 「X月X号/X月X日」直接取该日期，年份取当前年份（如果该日期已过，取明年）\n"
-    "- 「X分钟后/X小时后/X秒后」= 当前时间 + X（这是倒计时，不是具体钟点）：date=今天，time=换算出的 HH:MM。\n"
+    "- 「X分钟后/X小时后」= 当前时间 + X（这是倒计时，不是具体钟点）：date=今天，time=换算出的 HH:MM。\n"
     "- 如果有具体时间（如「下午2点」），填入 time 字段（24小时制 HH:MM）\n"
     "- 计算得出的 date 必须填入 YYYY-MM-DD 格式，不要算错！\n"
-    "5. **补充/跟进已有事项**：当用户对刚刚讨论或创建的事项补充信息时（如「提前30分钟和我说」「地点是XX」「备注一下」），必须在目录树中找到该事项（按名称语义匹配），用 append_note 补充内容或用 set_reminder 设置提醒，**不要**新建！判断标准：用户没有新的时间点关键词（下周一、明天等），且提到的是已经存在的东西，就应该是补充而非新建。\n"
+    "5. **补充/跟进已有事项**：当用户对刚刚讨论或创建的事项补充信息时（如「地点是XX」「备注一下」「改到3点」），必须在目录树中找到该事项（按名称语义匹配），用 append_note 补充内容或用 update_appointment / update_alarm 修改时间属性，**不要**新建！判断标准：用户没有新的时间点关键词（下周一、明天等），且提到的是已经存在的东西，就应该是补充而非新建。\n"
     "6. 用户口述的是全新备忘（无时间点、无对应已有笔记）时，用 create_note。\n"
     "7. 若指令包含多个步骤，在 steps 数组中按执行顺序排列。\n"
     "8. 对于在前面步骤中新建的文件夹/文件，后续步骤引用它时 id 留空\"\"，用名称引用。\n"
@@ -72,13 +77,8 @@ _SYSTEM_PROMPT_TEMPLATE = (
     "10. summary：简明概括计划执行的操作，供用户确认用。\n"
     "11. **时间语义匹配**：当用户用「昨天/今天/前天/大前天/上周/本月/X月X号/X月X日」等时间词指代笔记时，必须根据每行后面的「创建时间」判断该项的创建日期是否符合，**不要**用名称去匹配时间词。例如「删掉昨天的笔记」应删除创建时间在昨天的所有文件，而非名称含「昨天」的文件。涉及多条笔记时需设为多步骤（每条一个 delete），且 needs_confirmation=true。\n"
     "12. 每个 action 对象的参数直接平铺在对象中（如 {{\"action\":\"create_note\",\"content\":\"...\"}}），不要嵌套在 parameters 子对象里。\n"
-    "13. **新建日程+提醒**：当用户描述一个全新的日程且要求提醒时（如「每天中午12点网课提前3分钟通知」），必须分两步：\n"
-    "   步骤1: create_event（title=网课, date=今天或首次发生日期, time=12:00, content=用户原文）\n"
-    "   步骤2: set_reminder(name=网课, minutes=3, recurrence=daily/weekly/... , recurrence_end_date=如有结束日期则填)\n"
-    "   对于没有具体日期的周期日程（如「每天…」），date 填今天（YYYY-MM-DD）。步骤2 的 target_id 留空，用 name 引用步骤1 创建的名称。\n"
-    "   判断标准：目录树中不存在同名日程 + 用户提到了提醒相关词（通知/提醒/和我说/提前），就必须用 create_event + set_reminder 两步！\n"
-    "   **倒计时提醒**：若用户说「X分钟后/X小时后提醒我做Y」（相对现在，无具体钟点），则 time=当前时间+X（换算成 HH:MM），set_reminder 的 minutes=0（到点提醒，不是取消！）。例如「3分钟后提醒我出门遛狗」→ create_event(title=遛狗, date=今天, time=当前+3分钟) + set_reminder(name=遛狗, minutes=0)。只有用户明确说「提前X分钟」时才用 minutes=X。\n"
-    "14. **主题查询**：当用户说「购物相关的」「关于XX的笔记」等描述性查询时，请查看上面「匹配结果」中的记录——那就是数据库中实际匹配到的笔记/日程。直接操作这些记录，不要说无法筛选或缺少分类系统。如果匹配结果为空，返回空的 steps 即可。\n"
+    "13. **创建安排/闹钟一步到位**：安排和闹钟是独立实体，各用一条 action 创建即可，不要分两步。例如「每天中午12点喊我午休」→ create_alarm(name=午休, time=12:00, recurrence=daily)。「明天下午3点开会」→ create_appointment(title=开会, date=明天日期, time=15:00)。\n"
+    "14. **主题查询**：当用户说「购物相关的」「关于XX的笔记」等描述性查询时，请查看上面「匹配结果」中的记录——那就是数据库中实际匹配到的笔记/安排/闹钟。直接操作这些记录，不要说无法筛选或缺少分类系统。如果匹配结果为空，返回空的 steps 即可。\n"
     "15. 只输出 JSON 对象，不要 markdown 代码块，不要解释。"
 )
 
@@ -143,26 +143,35 @@ async def _build_target_context(file_id: str) -> str:
     if len(content) > 800:
         preview += "\n...(内容已截断)"
 
-    if ftype == "event":
+    if ftype == "appointment":
+        type_label = "安排"
         action_hint = (
-            f"这是一条日程。用户可能要求调整日程的时间/日期/提前提醒/重复周期，"
-            f"此时必须用 update_schedule(target_id='{file_id}', ...) 更新日程属性；"
+            f"这是一条安排（一次性）。用户可能要求调整安排的时间/日期/标题，"
+            f"此时必须用 update_appointment(target_id='{file_id}', ...) 更新安排属性；"
             f"只有用户明确要求修改正文内容时，才用 append_note。"
         )
+    elif ftype == "alarm":
+        type_label = "闹钟"
+        action_hint = (
+            f"这是一个闹钟（周期性）。用户可能要求调整闹钟的时间/周期，"
+            f"此时必须用 update_alarm(target_id='{file_id}', ...) 更新闹钟属性；"
+            f"只有用户明确要求修改备注内容时，才用 append_note。"
+        )
     else:
+        type_label = "笔记"
         action_hint = (
             f"请用 append_note(target_id='{file_id}', content='调整指令') 把用户意图传递给后续处理。"
         )
 
     return (
         f"## 当前编辑目标\n"
-        f"用户正在编辑这篇{'日程' if ftype == 'event' else '笔记'}：\n"
+        f"用户正在编辑这篇{type_label}：\n"
         f"- id: {file_id}\n"
         f"- 名称: {name}\n"
         f"- 内容预览:\n```\n{preview}\n```\n\n"
-        f"**重要**：用户的所有修改意图都是针对这篇{'日程' if ftype == 'event' else '笔记'}的。"
+        f"**重要**：用户的所有修改意图都是针对这篇{type_label}的。"
         f"{action_hint}\n"
-        f"content 字段填入对笔记的具体操作指令（而非原文照抄），例如：\n"
+        f"content 字段填入对{type_label}的具体操作指令（而非原文照抄），例如：\n"
         f"  - 修改：「把时间改为14:00，日期改为2026-08-12」\n"
         f"  - 删除：「删除日期和时间的行」「去掉第二行」\n"
         f"  - 新增：「补充：记得带毛巾」\n"
@@ -211,6 +220,15 @@ def _extract_date_from_text(text: str, now: datetime) -> str | None:
     return None
 
 
+def _type_label(ftype: str) -> str:
+    """把文件类型映射为中文标签。"""
+    if ftype == "appointment":
+        return "安排"
+    if ftype == "alarm":
+        return "闹钟"
+    return "笔记"
+
+
 async def _build_date_filtered_context(text: str) -> str:
     """如果用户文本中包含日期引用，查询 PostgreSQL 过滤匹配文件，返回预过滤上下文。
 
@@ -225,16 +243,16 @@ async def _build_date_filtered_context(text: str) -> str:
     if not files:
         return (
             f"## 日期过滤结果\n"
-            f"用户提到的日期为 {date_str}，但数据库中**没有**该日期创建的笔记或日程。\n"
+            f"用户提到的日期为 {date_str}，但数据库中**没有**该日期创建的笔记、安排或闹钟。\n"
             f"请如实告知用户没有匹配项，不要虚构任何文件。\n\n"
         )
 
-    lines = [f"## 日期过滤结果：{date_str} 创建的笔记/日程"]
+    lines = [f"## 日期过滤结果：{date_str} 创建的笔记/安排/闹钟"]
     for f in files:
         name = f.get("name", "")
         fid = f.get("id", "")
         ftype = f.get("type", "note")
-        type_label = "日程" if ftype == "event" else "笔记"
+        type_label = _type_label(ftype)
         lines.append(f"{type_label} | {fid} | {name}")
     lines.append(f"\n以上是数据库中 {date_str} 创建的 {len(files)} 条记录。")
     lines.append("如果用户要求删除/操作这些笔记，请只操作上面的记录，不要虚构不存在的文件。\n")
@@ -251,7 +269,7 @@ async def _build_semantic_context(text: str) -> str:
     #    取 2-4 字长度的中文词作为关键词
     keywords = set(re.findall(r"[\u4e00-\u9fa5]{2,4}", text))
     # 去掉常见的功能词
-    stop_words = {"帮我", "找到", "并且", "删掉", "一下", "那个", "这个", "那些", "这些", "删除", "笔记", "日程"}
+    stop_words = {"帮我", "找到", "并且", "删掉", "一下", "那个", "这个", "那些", "这些", "删除", "笔记", "日程", "安排", "闹钟"}
     keywords -= stop_words
 
     keyword_files: list[dict] = []
@@ -289,7 +307,7 @@ async def _build_semantic_context(text: str) -> str:
         lines.append("（关键词匹配，字面包含相同文字，可靠性高）")
         for f in kw_items:
             ftype = f.get("type", "note")
-            type_label = "日程" if ftype == "event" else "笔记"
+            type_label = _type_label(ftype)
             lines.append(f"{type_label} | {f.get('id')} | {f.get('name')}")
 
     # 语义匹配组（排除已在关键词组中的）
@@ -298,11 +316,11 @@ async def _build_semantic_context(text: str) -> str:
         lines.append("（语义匹配，名称不同但含义相关，仅供参考）")
         for f in sem_items:
             ftype = f.get("type", "note")
-            type_label = "日程" if ftype == "event" else "笔记"
+            type_label = _type_label(ftype)
             lines.append(f"{type_label} | {f.get('id')} | {f.get('name')}")
 
     lines.append(f"\n以上共 {len(combined)} 条可能匹配的记录。")
-    lines.append("**重要**：上面的匹配结果就是根据用户描述从数据库中实际查到的笔记/日程。")
+    lines.append("**重要**：上面的匹配结果就是根据用户描述从数据库中实际查到的笔记/安排/闹钟。")
     lines.append("如果用户说「购物相关的」「关于XX的」等描述性查询，请直接把匹配到的记录作为结果。")
     lines.append("不要认为需要额外的「主题标记」或「分类系统」——关键词匹配本身就是按内容筛选。\n")
     return "\n".join(lines)
