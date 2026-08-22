@@ -33,9 +33,8 @@ async def create_event(body: EventCreateRequest):
         uncategorized = await crud.get_default_uncategorized_folder()
         folder_id = uncategorized["id"]
 
-    markdown = body.content or f"# {body.title}\n- 日期：{body.date}\n" + (
-        f"- 时间：{body.time}\n" if body.time else ""
-    )
+    # 详情页已展示日期/时间，content 不再重复拼接日期/时间
+    markdown = body.content
     file_doc = await crud.create_file(
         name=body.title, content=markdown, parent_id=folder_id,
         file_type="event", date=body.date, time=body.time,

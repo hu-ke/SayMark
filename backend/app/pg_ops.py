@@ -342,6 +342,95 @@ async def set_reminder(file_id: int, minutes: int, recurrence: str = "", recurre
     return await get_file(file_id)
 
 
+async def update_file_schedule(
+    file_id: int,
+    date: Optional[str] = None,
+    time: Optional[str] = None,
+    reminder_minutes: Optional[int] = None,
+    recurrence: Optional[str] = None,
+    recurrence_end_date: Optional[str] = None,
+    repeat_enabled: Optional[bool] = None,
+    repeat_unit: Optional[str] = None,
+    repeat_value: Optional[int] = None,
+) -> dict | None:
+    """更新日程属性（日期/时间/提醒/重复）。None 表示不改动。"""
+    file_id = int(file_id)
+    file = await get_file(file_id)
+    if file is None:
+        return None
+
+    now = _now()
+
+    def _to_str(v) -> str:
+        if v is None:
+            return ""
+        if hasattr(v, "isoformat"):
+            return v.isoformat()
+        return str(v)
+
+    existing_date = _to_str(file.get("date"))
+    existing_time = _to_str(file.get("time"))
+
+    new_date = date if date is not None else existing_date
+    new_time = time if time is not None else existing_time
+    # 只保留 YYYY-MM-DD / HH:MM（存储读取时可能带秒）
+    new_date = new_date[:10] if new_date else ""
+    new_time = new_time[:5] if new_time else ""
+
+    date_obj = datetime.strptime(new_date, "%Y-%m-%d").date() if new_date else None
+    time_obj = datetime.strptime(new_time, "%H:%M").time() if new_time else None
+
+    if reminder_minutes is not None:
+        new_reminder = None if reminder_minutes <= 0 else reminder_minutes
+    else:
+        new_reminder = file.get("reminder_minutes")
+
+    if recurrence is not None:
+        new_recurrence = recurrence or None
+    else:
+        new_recurrence = file.get("recurrence")
+
+    existing_end_date = _to_str(file.get("recurrence_end_date"))
+    new_end_date = recurrence_end_date if recurrence_end_date is not None else existing_end_date
+    new_end_date = new_end_date[:10] if new_end_date else None
+    end_date_obj = datetime.strptime(new_end_date, "%Y-%m-%d").date() if new_end_date else None
+
+    schedule_json = None
+    if _HAS_SCHEDULE:
+        schedule: dict = {}
+        raw = file.get("schedule")
+        if raw:
+            try:
+                schedule = json.loads(raw)
+            except Exception:
+                schedule = {}
+        schedule["date"] = new_date
+        schedule["time"] = new_time
+        rep = dict(schedule.get("repeat") or {})
+        if repeat_enabled is not None:
+            rep["enabled"] = bool(repeat_enabled)
+        if repeat_unit is not None:
+            rep["unit"] = repeat_unit
+        if repeat_value is not None:
+            rep["value"] = int(repeat_value)
+        schedule["repeat"] = rep
+        schedule_json = json.dumps(schedule, ensure_ascii=False)
+
+    if _HAS_SCHEDULE:
+        r = await pg_db.execute(
+            'UPDATE files SET date=$1, "time"=$2, reminder_minutes=$3, recurrence=$4, recurrence_end_date=$5, schedule=$6, updated_at=$7 WHERE id=$8',
+            date_obj, time_obj, new_reminder, new_recurrence, end_date_obj, schedule_json, now, file_id,
+        )
+    else:
+        r = await pg_db.execute(
+            'UPDATE files SET date=$1, "time"=$2, reminder_minutes=$3, recurrence=$4, recurrence_end_date=$5, updated_at=$6 WHERE id=$7',
+            date_obj, time_obj, new_reminder, new_recurrence, end_date_obj, now, file_id,
+        )
+    if r.endswith("0"):
+        return None
+    return await get_file(file_id)
+
+
 # ----------------------------- 语义搜索 -----------------------------
 
 

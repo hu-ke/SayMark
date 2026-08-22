@@ -3,7 +3,7 @@
 from fastapi import APIRouter, HTTPException
 
 from .. import pg_ops as crud
-from ..schemas import FileCreate, FileMove, FileResponse, FileUpdate
+from ..schemas import FileCreate, FileMove, FileResponse, FileUpdate, ScheduleUpdate
 
 router = APIRouter(prefix="/api/files", tags=["files"])
 
@@ -49,6 +49,28 @@ async def update_file(file_id: str, body: FileUpdate):
                 raise HTTPException(status_code=404, detail="文件不存在")
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
+    return result
+
+
+@router.patch("/{file_id}/schedule", response_model=FileResponse)
+async def update_file_schedule(file_id: str, body: ScheduleUpdate):
+    """更新日程属性（日期/时间/提醒/重复）。"""
+    try:
+        result = await crud.update_file_schedule(
+            file_id,
+            date=body.date,
+            time=body.time,
+            reminder_minutes=body.reminder_minutes,
+            recurrence=body.recurrence,
+            recurrence_end_date=body.recurrence_end_date,
+            repeat_enabled=body.repeat_enabled,
+            repeat_unit=body.repeat_unit,
+            repeat_value=body.repeat_value,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    if result is None:
+        raise HTTPException(status_code=404, detail="文件不存在")
     return result
 
 

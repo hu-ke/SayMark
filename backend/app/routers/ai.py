@@ -199,6 +199,9 @@ _AGENT_SYSTEM_PROMPT = f"""\
 12. save_place — 保存地点
     参数：name(地名), lat(纬度), lon(经度)
 
+13. update_schedule — 修改已有日程的时间/日期/提醒/重复属性
+    参数：target_id?(日程id), name?(日程名兜底), date?(YYYY-MM-DD), time?(HH:MM), reminder_minutes?(提前分钟数, 0=取消), repeat_enabled?(true/false), repeat_unit?(seconds/minutes/hours/days), repeat_value?(数字)
+
 ## 输出格式
 
 - 需要调用工具时（可一次多个），必须包含 thinking 字段说明你的计划：
@@ -256,6 +259,7 @@ def _action_label(step: dict) -> str:
         "create_event": f"创建日程{name_part}",
         "append_note": f"补充内容到{name_part or '笔记'}",
         "set_reminder": f"设置提醒{name_part}",
+        "update_schedule": f"调整日程{name_part}",
         "save_place": f"保存地点{name_part}",
         "create_folder": f"创建文件夹{name_part}",
         "rename": f"重命名{name_part}",

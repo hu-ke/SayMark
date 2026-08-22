@@ -68,6 +68,7 @@ async def execute(parsed: dict) -> dict:
             "create_event": _handle_create_event,
             "append_note": _handle_append_note,
             "set_reminder": _handle_set_reminder,
+            "update_schedule": _handle_update_schedule,
             "save_place": _handle_save_place,
             "create_folder": _handle_create_folder,
             "rename": _handle_rename,
@@ -215,10 +216,8 @@ async def _handle_create_event(parsed: dict) -> dict:
     if not date:
         return _result("create_event", False, "缺少日程日期 date (YYYY-MM-DD)")
     folder_id, msg_parts = await _resolve_target_folder(parsed)
-    if content:
-        markdown = f"# {title}\n- 日期：{date}\n" + (f"- 时间：{time_}\n" if time_ else "") + f"\n{content}"
-    else:
-        markdown = f"# {title}\n- 日期：{date}\n" + (f"- 时间：{time_}\n" if time_ else "")
+    # 详情页已展示日期/时间，content 只保存正文，不重复拼日期/时间
+    markdown = content
     doc = await db.create_file(title, markdown, folder_id, file_type="event", date=date, time=time_)
     await _store_embedding(doc["id"], title, markdown)
     msg = "日程已创建"
@@ -268,6 +267,68 @@ async def _handle_set_reminder(parsed: dict) -> dict:
     if minutes == 0:
         label = "已取消提醒"
     return _result("set_reminder", True, label, updated)
+
+
+_VALID_REPEAT_UNITS = {"seconds", "minutes", "hours", "days"}
+_REPEAT_UNIT_LABELS = {"seconds": "秒", "minutes": "分钟", "hours": "小时", "days": "天"}
+
+
+async def _handle_update_schedule(parsed: dict) -> dict:
+    """更新日程属性（日期/时间/提醒/重复）。用于详情页内语音调整日程。"""
+    file_id, doc, err = await _resolve_file(parsed, "日程")
+    if err:
+        return _result("update_schedule", False, err)
+
+    def _opt_int(key: str) -> int | None:
+        v = parsed.get(key)
+        if v is None or v == "":
+            return None
+        try:
+            return int(v)
+        except (ValueError, TypeError):
+            return None
+
+    date = str(parsed.get("date") or "").strip() or None
+    time = str(parsed.get("time") or "").strip() or None
+    reminder_minutes = _opt_int("reminder_minutes")
+
+    repeat_enabled = parsed.get("repeat_enabled")
+    if repeat_enabled is not None and not isinstance(repeat_enabled, bool):
+        repeat_enabled = str(repeat_enabled).lower() in ("true", "1", "yes")
+
+    repeat_unit = str(parsed.get("repeat_unit") or "").strip() or None
+    repeat_value = _opt_int("repeat_value")
+
+    if repeat_unit and repeat_unit not in _VALID_REPEAT_UNITS:
+        return _result("update_schedule", False, f"repeat_unit 无效：{repeat_unit}")
+
+    updated = await db.update_file_schedule(
+        file_id,
+        date=date,
+        time=time,
+        reminder_minutes=reminder_minutes,
+        repeat_enabled=repeat_enabled,
+        repeat_unit=repeat_unit,
+        repeat_value=repeat_value,
+    )
+    if updated is None:
+        return _result("update_schedule", False, "日程不存在或更新失败")
+
+    parts: list[str] = []
+    if date:
+        parts.append(f"日期 {date}")
+    if time:
+        parts.append(f"时间 {time}")
+    if reminder_minutes is not None:
+        parts.append("取消提醒" if reminder_minutes <= 0 else f"提前 {reminder_minutes} 分钟提醒")
+    if repeat_enabled is not None:
+        if repeat_enabled and repeat_unit and repeat_value:
+            unit_label = _REPEAT_UNIT_LABELS.get(repeat_unit, repeat_unit)
+            parts.append(f"每 {repeat_value} {unit_label}重复")
+        elif not repeat_enabled:
+            parts.append("取消重复")
+    label = "已更新日程：" + "，".join(parts) if parts else "日程已更新"
+    return _result("update_schedule", True, label, updated)
 
 
 _device_id: str | None = None

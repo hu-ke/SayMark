@@ -69,6 +69,12 @@ struct NoteFile: Codable, Identifiable, Hashable {
         }
         return "每 \(value) \(unitLabel)"
     }
+
+    /// 重复周期显示（优先新 repeat，其次旧 recurrence）
+    var repeatText: String? {
+        if let s = scheduleRepeatLabel, !s.isEmpty { return s }
+        return recurrenceLabel.isEmpty ? nil : recurrenceLabel
+    }
 }
 
 /// 日程重复规则（新建日程时使用）
@@ -88,4 +94,16 @@ struct SchedulePayload: Codable {
         case date, time
         case repeatRule = "repeat"
     }
+}
+
+/// 日程属性更新请求体（nil 字段不会被发送）
+struct ScheduleUpdatePayload: Codable {
+    var date: String?
+    var time: String?
+    var reminder_minutes: Int?
+    var recurrence: String?
+    var recurrence_end_date: String?
+    var repeat_enabled: Bool?
+    var repeat_unit: String?
+    var repeat_value: Int?
 }

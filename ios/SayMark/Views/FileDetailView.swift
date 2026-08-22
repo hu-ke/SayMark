@@ -14,13 +14,16 @@ struct FileDetailView: View {
     @State private var editedContent = ""
     @State private var previousContent = ""
     @State private var isVoiceEditing = false
-    @State private var voiceEditText = ""
+    @State private var isPressingMic = false
+    @StateObject private var speechRecognizer = SpeechRecognizer()
     @State private var showRenameAlert = false
     @State private var renameText = ""
     @State private var showMoveSheet = false
     @State private var exportItem: ExportItem?
-    @State private var showSavedToast = false
+    @State private var showToast = false
+    @State private var toastText = "已保存"
     @State private var activeDialog: Dialog?
+    @State private var showScheduleEdit = false
 
     private enum Dialog: String, Identifiable {
         case delete, unsaved
@@ -130,11 +133,11 @@ struct FileDetailView: View {
                 voiceEditOverlay
             }
 
-            // 已保存提示
-            if showSavedToast {
+            // 提示 Toast
+            if showToast {
                 VStack {
                     Spacer()
-                    Text("已保存")
+                    Text(toastText)
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(.white)
                         .padding(.horizontal, 18)
@@ -149,6 +152,17 @@ struct FileDetailView: View {
         }
         .background(UIConstants.background)
         .navigationBarHidden(true)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 30)
+                .onEnded { value in
+                    let w = value.translation.width
+                    let h = value.translation.height
+                    // 从左侧边缘右滑，等同于点击返回（编辑中会触发未保存提示）
+                    if value.startLocation.x < 40, w > 80, abs(w) > abs(h) {
+                        attemptDismiss()
+                    }
+                }
+        )
         .task {
             viewModel.fileId = fileId
             await viewModel.reload()
@@ -204,6 +218,13 @@ struct FileDetailView: View {
                 moveTo(folderId)
             }
         }
+        .sheet(isPresented: $showScheduleEdit) {
+            if let note = viewModel.note {
+                ScheduleEditSheet(note: note) {
+                    Task { await viewModel.reload() }
+                }
+            }
+        }
         .sheet(item: $exportItem) { item in
             ActivityView(activityItems: [item.url])
         }
@@ -224,7 +245,9 @@ struct FileDetailView: View {
 
                 // 日程信息卡片
                 if note.isEvent {
-                    eventInfoCard(note)
+                    EventScheduleCard(note: note) {
+                        showScheduleEdit = true
+                    }
                 }
 
                 // 正文
@@ -252,49 +275,6 @@ struct FileDetailView: View {
             .padding(.horizontal, 20)
             .padding(.top, 16)
         }
-    }
-
-    // MARK: - Event Info Card
-    private func eventInfoCard(_ note: NoteFile) -> some View {
-        VStack(spacing: 0) {
-            eventRow(icon: "calendar", label: "日期", value: formatDate(note.date))
-
-            if !note.time.isEmpty {
-                Divider().padding(.leading, 16)
-                eventRow(icon: "clock", label: "时间", value: note.time)
-            }
-
-            let repeatLabel = note.recurrenceLabel.isEmpty ? note.scheduleRepeatLabel : note.recurrenceLabel
-            if let repeatLabel, !repeatLabel.isEmpty {
-                Divider().padding(.leading, 16)
-                eventRow(icon: "repeat", label: "重复", value: repeatLabel)
-            }
-        }
-        .cardStyle()
-        .padding(.bottom, 20)
-    }
-
-    private func eventRow(icon: String, label: String, value: String) -> some View {
-        HStack(spacing: 12) {
-            RowIcon(systemName: icon, color: UIConstants.orange)
-            Text(label)
-                .font(.system(size: 15))
-                .foregroundColor(UIConstants.label3)
-                .frame(width: 44, alignment: .leading)
-            Text(value)
-                .font(.system(size: 15, weight: .medium))
-                .foregroundColor(UIConstants.label)
-            Spacer()
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 11)
-    }
-
-    private func formatDate(_ date: String) -> String {
-        guard !date.isEmpty else { return "" }
-        let parts = date.split(separator: "-")
-        guard parts.count == 3 else { return date }
-        return "\(Int(parts[1]) ?? 0)月\(Int(parts[2]) ?? 0)日"
     }
 
     // MARK: - Edit Mode
@@ -349,18 +329,22 @@ struct FileDetailView: View {
             }
             .frame(maxWidth: .infinity)
 
-            // 语音麦克风
-            Button {
-                startVoiceEdit()
-            } label: {
-                Image(systemName: "mic.fill")
-                    .font(.system(size: 22))
-                    .foregroundColor(.white)
-                    .frame(width: 46, height: 46)
-                    .background(Circle().fill(UIConstants.blue))
-                    .shadow(color: UIConstants.blue.opacity(0.38), radius: 10, y: 2)
-            }
-            .frame(maxWidth: .infinity)
+            // 语音麦克风（按住说话，松开后由 AI 调整当前笔记）
+            Image(systemName: "mic.fill")
+                .font(.system(size: 22))
+                .foregroundColor(.white)
+                .frame(width: 46, height: 46)
+                .background(Circle().fill(isPressingMic ? UIConstants.red : UIConstants.blue))
+                .shadow(color: (isPressingMic ? UIConstants.red : UIConstants.blue).opacity(0.38), radius: 10, y: 2)
+                .contentShape(Circle())
+                .onLongPressGesture(minimumDuration: 0.2, maximumDistance: 60, perform: {}, onPressingChanged: { pressing in
+                    if pressing {
+                        startVoiceRecording()
+                    } else {
+                        stopVoiceRecording()
+                    }
+                })
+                .frame(maxWidth: .infinity)
 
             // 右下角：编辑时显示保存，非编辑时留空
             if isEditing {
@@ -430,9 +414,7 @@ struct FileDetailView: View {
         Task { @MainActor in
             await viewModel.save(name: title, content: editedContent)
             withAnimation(.easeInOut(duration: 0.2)) { isEditing = false }
-            showSavedToast = true
-            try? await Task.sleep(nanoseconds: 1_400_000_000)
-            showSavedToast = false
+            showToastMessage("已保存")
         }
     }
 
@@ -458,18 +440,38 @@ struct FileDetailView: View {
         return t.isEmpty ? (viewModel.note?.name ?? fileName) : t
     }
 
-    private func startVoiceEdit() {
+    private func startVoiceRecording() {
+        isPressingMic = true
+        Task { await speechRecognizer.startRecording() }
+    }
+
+    private func stopVoiceRecording() {
+        isPressingMic = false
+        speechRecognizer.stopRecording()
+        let text = speechRecognizer.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        Task { await adjustNote(with: text) }
+    }
+
+    @MainActor
+    private func adjustNote(with prompt: String) async {
         isVoiceEditing = true
-        // 模拟语音处理延迟
-        Task {
-            try? await Task.sleep(nanoseconds: 2_200_000_000)
-            await MainActor.run {
-                isVoiceEditing = false
-            }
-            // 实际应调用 API: sendVoiceEdit
-            if !isEditing {
-                enterEditMode(focus: .content)
-            }
+        do {
+            let result = try await APIClient.shared.sendCommand(text: prompt, targetFileId: fileId)
+            await viewModel.reload()
+            showToastMessage(result.message)
+        } catch {
+            showToastMessage(error.localizedDescription)
+        }
+        isVoiceEditing = false
+    }
+
+    private func showToastMessage(_ message: String) {
+        toastText = message
+        showToast = true
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_600_000_000)
+            showToast = false
         }
     }
 
@@ -763,5 +765,402 @@ struct MarkdownPreview: View {
         }
 
         return blocks
+    }
+}
+
+// MARK: - Schedule Card
+
+struct EventScheduleCard: View {
+    let note: NoteFile
+    var onEdit: () -> Void
+
+    private var eventDate: Date? {
+        ScheduleDateHelper.eventDate(date: note.date, time: note.time)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // 卡片头
+            HStack(spacing: 8) {
+                Image(systemName: "calendar")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(UIConstants.orange)
+                Text("日程")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(UIConstants.orange)
+                Spacer()
+                Button(action: onEdit) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "pencil")
+                            .font(.system(size: 12))
+                        Text("调整")
+                            .font(.system(size: 13))
+                    }
+                    .foregroundColor(UIConstants.blue)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+
+            HDSeparator()
+
+            scheduleRow(icon: "clock", title: "时间", value: formattedDateTime)
+            HDSeparator().padding(.leading, 14)
+            scheduleRow(icon: "bell", title: "提醒", value: reminderText)
+            HDSeparator().padding(.leading, 14)
+            remainingRow()
+            HDSeparator().padding(.leading, 14)
+            scheduleRow(icon: "repeat", title: "重复", value: note.repeatText ?? "无")
+        }
+        .cardStyle()
+        .padding(.bottom, 16)
+    }
+
+    private var formattedDateTime: String {
+        let dateStr = note.date.isEmpty ? "" : note.date
+        let timeStr = note.time.count >= 5 ? String(note.time.prefix(5)) : note.time
+        if dateStr.isEmpty && timeStr.isEmpty { return "—" }
+        if dateStr.isEmpty { return timeStr }
+        if timeStr.isEmpty { return dateStr }
+        return "\(dateStr) \(timeStr)"
+    }
+
+    private var reminderText: String {
+        if let m = note.reminderMinutes, m > 0 {
+            return "提前 \(m) 分钟"
+        }
+        return "无"
+    }
+
+    private func scheduleRow(icon: String, title: String, value: String) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 14))
+                .foregroundColor(UIConstants.label3)
+                .frame(width: 20)
+            Text(title)
+                .font(.system(size: 15))
+                .foregroundColor(UIConstants.label3)
+            Spacer()
+            Text(value)
+                .font(.system(size: 15))
+                .foregroundColor(UIConstants.label)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
+    }
+
+    private func remainingRow() -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "hourglass")
+                .font(.system(size: 14))
+                .foregroundColor(UIConstants.label3)
+                .frame(width: 20)
+            Text("剩余")
+                .font(.system(size: 15))
+                .foregroundColor(UIConstants.label3)
+            Spacer()
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                Text(remainingText(now: context.date))
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundColor(remainingColor(now: context.date))
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
+    }
+
+    private func remainingText(now: Date) -> String {
+        guard let eventDate else { return "—" }
+        let secs = eventDate.timeIntervalSince(now)
+        if secs <= 0 { return "已开始" }
+        if secs < 60 {
+            let total = Int(secs)
+            return String(format: "%02d:%02d", total / 60, total % 60)
+        }
+        let totalMinutes = Int(secs / 60)
+        let days = totalMinutes / (24 * 60)
+        let hours = (totalMinutes % (24 * 60)) / 60
+        let minutes = totalMinutes % 60
+        if days > 0 {
+            return hours > 0 ? "\(days)天\(hours)小时" : "\(days)天"
+        }
+        if hours > 0 {
+            return minutes > 0 ? "\(hours)小时\(minutes)分钟" : "\(hours)小时"
+        }
+        return "\(max(minutes, 1))分钟"
+    }
+
+    private func remainingColor(now: Date) -> Color {
+        guard let eventDate else { return UIConstants.label3 }
+        let secs = eventDate.timeIntervalSince(now)
+        if secs <= 0 { return UIConstants.label3 }
+        if secs < 60 { return UIConstants.orange }
+        return UIConstants.blue
+    }
+}
+
+// MARK: - Schedule Edit Sheet
+
+private struct ScheduleRepeatUnit: Identifiable {
+    let value: String
+    let label: String
+    var id: String { value }
+}
+
+struct ScheduleEditSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let note: NoteFile
+    var onSaved: () -> Void
+
+    @State private var date: Date
+    @State private var time: Date
+    @State private var reminderEnabled: Bool
+    @State private var reminderMinutes: Int
+    @State private var repeatEnabled: Bool
+    @State private var repeatUnit: String
+    @State private var repeatValue: Int
+    @State private var isSaving = false
+    @State private var errorMessage: String?
+
+    private let repeatUnits: [ScheduleRepeatUnit] = [
+        ScheduleRepeatUnit(value: "seconds", label: "秒"),
+        ScheduleRepeatUnit(value: "minutes", label: "分钟"),
+        ScheduleRepeatUnit(value: "hours", label: "小时"),
+        ScheduleRepeatUnit(value: "days", label: "天"),
+    ]
+
+    init(note: NoteFile, onSaved: @escaping () -> Void) {
+        self.note = note
+        self.onSaved = onSaved
+        _date = State(initialValue: ScheduleDateHelper.date(fromDateString: note.date) ?? Date())
+        _time = State(initialValue: ScheduleDateHelper.time(fromTimeString: note.time) ?? Date())
+        let rem = note.reminderMinutes ?? 0
+        _reminderEnabled = State(initialValue: rem > 0)
+        _reminderMinutes = State(initialValue: rem > 0 ? rem : 10)
+        let rep = ScheduleDateHelper.repeatRule(from: note)
+        _repeatEnabled = State(initialValue: rep.enabled)
+        _repeatUnit = State(initialValue: rep.unit)
+        _repeatValue = State(initialValue: rep.value)
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Button("取消") { dismiss() }
+                    .font(.system(size: 17))
+                    .foregroundColor(UIConstants.blue)
+                Spacer()
+                Text("调整日程")
+                    .font(.system(size: 17, weight: .semibold))
+                    .kerning(-0.41)
+                Spacer()
+                Button {
+                    save()
+                } label: {
+                    if isSaving {
+                        ProgressView()
+                    } else {
+                        Text("保存")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundColor(UIConstants.blue)
+                    }
+                }
+                .disabled(isSaving)
+            }
+            .padding(.horizontal, 16)
+            .frame(height: 44)
+            .background(
+                UIConstants.background.opacity(0.82)
+                    .background(Material.ultraThin)
+            )
+            .overlay(alignment: .bottom) { HDSeparator() }
+
+            ScrollView {
+                VStack(spacing: 0) {
+                    sectionHeader("时间")
+                    VStack(spacing: 0) {
+                        DatePicker("日期", selection: $date, displayedComponents: .date)
+                            .font(.system(size: 16))
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 11)
+                        Divider().padding(.leading, 16)
+                        DatePicker("时间", selection: $time, displayedComponents: .hourAndMinute)
+                            .font(.system(size: 16))
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 11)
+                    }
+                    .cardStyle()
+
+                    sectionHeader("提醒", top: 14)
+                    VStack(spacing: 0) {
+                        Toggle("提前提醒", isOn: $reminderEnabled)
+                            .tint(UIConstants.blue)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 11)
+                        if reminderEnabled {
+                            Divider().padding(.leading, 16)
+                            HStack {
+                                Text("提前")
+                                    .font(.system(size: 16))
+                                    .foregroundColor(UIConstants.label)
+                                Spacer()
+                                Stepper("\(reminderMinutes) 分钟", value: $reminderMinutes, in: 1...1440, step: 5)
+                                    .font(.system(size: 16, weight: .medium))
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 11)
+                        }
+                    }
+                    .cardStyle()
+
+                    sectionHeader("重复", top: 14)
+                    VStack(spacing: 0) {
+                        Toggle("重复", isOn: $repeatEnabled)
+                            .tint(UIConstants.blue)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 11)
+                        if repeatEnabled {
+                            Divider().padding(.leading, 16)
+                            HStack {
+                                Text("单位")
+                                    .font(.system(size: 16))
+                                    .foregroundColor(UIConstants.label)
+                                Spacer()
+                                Picker("单位", selection: $repeatUnit) {
+                                    ForEach(repeatUnits, id: \.value) { unit in
+                                        Text(unit.label).tag(unit.value)
+                                    }
+                                }
+                                .pickerStyle(.menu)
+                                .tint(UIConstants.label3)
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 11)
+
+                            Divider().padding(.leading, 16)
+                            HStack {
+                                Text("值")
+                                    .font(.system(size: 16))
+                                    .foregroundColor(UIConstants.label)
+                                Spacer()
+                                Stepper("\(repeatValue)", value: $repeatValue, in: 1...9999)
+                                    .font(.system(size: 16, weight: .medium))
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 11)
+                        }
+                    }
+                    .cardStyle()
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 24)
+            }
+        }
+        .background(UIConstants.background)
+        .interactiveDismissDisabled(isSaving)
+        .alert("保存失败", isPresented: Binding(
+            get: { errorMessage != nil },
+            set: { if !$0 { errorMessage = nil } }
+        )) {
+            Button("确定", role: .cancel) {}
+        } message: {
+            Text(errorMessage ?? "")
+        }
+    }
+
+    private func sectionHeader(_ title: String, top: CGFloat = 20) -> some View {
+        Text(title)
+            .font(.system(size: 13))
+            .textCase(.uppercase)
+            .foregroundColor(UIConstants.label3)
+            .kerning(0.065)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.bottom, 6)
+            .padding(.top, top)
+    }
+
+    private func save() {
+        isSaving = true
+        let payload = ScheduleUpdatePayload(
+            date: ScheduleDateHelper.dateString(date),
+            time: ScheduleDateHelper.timeString(time),
+            reminder_minutes: reminderEnabled ? reminderMinutes : 0,
+            recurrence: nil,
+            recurrence_end_date: nil,
+            repeat_enabled: repeatEnabled,
+            repeat_unit: repeatUnit,
+            repeat_value: repeatValue
+        )
+        Task { @MainActor in
+            defer { isSaving = false }
+            do {
+                _ = try await APIClient.shared.updateSchedule(fileId: note.id, schedule: payload)
+                onSaved()
+                dismiss()
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+}
+
+// MARK: - Schedule Date Helpers
+
+private enum ScheduleDateHelper {
+    static func eventDate(date: String, time: String) -> Date? {
+        let timePrefix = time.count >= 5 ? String(time.prefix(5)) : time
+        guard !date.isEmpty || !timePrefix.isEmpty else { return nil }
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd HH:mm"
+        return f.date(from: "\(date) \(timePrefix)")
+    }
+
+    static func date(fromDateString s: String) -> Date? {
+        guard !s.isEmpty else { return nil }
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd"
+        return f.date(from: s)
+    }
+
+    static func time(fromTimeString s: String) -> Date? {
+        let prefix = s.count >= 5 ? String(s.prefix(5)) : s
+        guard !prefix.isEmpty else { return nil }
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "HH:mm"
+        return f.date(from: prefix)
+    }
+
+    static func dateString(_ d: Date) -> String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd"
+        return f.string(from: d)
+    }
+
+    static func timeString(_ d: Date) -> String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "HH:mm"
+        return f.string(from: d)
+    }
+
+    static func repeatRule(from note: NoteFile) -> (enabled: Bool, unit: String, value: Int) {
+        guard let schedule = note.schedule,
+              let data = schedule.data(using: .utf8),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let rep = obj["repeat"] as? [String: Any] else {
+            return (false, "days", 1)
+        }
+        let enabled = rep["enabled"] as? Bool ?? false
+        var unit = rep["unit"] as? String ?? "days"
+        if unit.isEmpty { unit = "days" }
+        var value = rep["value"] as? Int ?? 1
+        if value < 1 { value = 1 }
+        return (enabled, unit, value)
     }
 }

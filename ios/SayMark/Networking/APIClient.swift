@@ -175,6 +175,10 @@ final class APIClient {
                                body: Body(type: type, source_id: sourceId, target_id: targetId))
     }
 
+    func updateSchedule(fileId: String, schedule: ScheduleUpdatePayload) async throws -> NoteFile {
+        try await request(path: "/api/files/\(fileId)/schedule", method: "PATCH", body: schedule)
+    }
+
     // MARK: - 笔记与 AI 指令
 
     /// 语音转笔记（POST /api/notes）

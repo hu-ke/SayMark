@@ -59,7 +59,7 @@
 		87B8EE13F86150EC6154F854 /* CommandInputView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandInputView.swift; sourceTree = "<group>"; };
 		A9A25F1E37A1132E151AB815 /* AVFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVFoundation.framework; path = System/Library/Frameworks/AVFoundation.framework; sourceTree = SDKROOT; };
 		B59D25B1E1F2199DBDCE880C /* CalendarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarView.swift; sourceTree = "<group>"; };
-		BB4A4C0AC8816F24E4876B38 /* SayMark.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = SayMark.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		BB4A4C0AC8816F24E4876B38 /* SayMark.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SayMark.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C4E11FF51E485892D46416D5 /* NoteViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteViewModel.swift; sourceTree = "<group>"; };
 		CA85CA260FA3DB7EC67B9F87 /* Folder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Folder.swift; sourceTree = "<group>"; };
 		CD6A795B59A8165D2D98B1C5 /* RenameSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RenameSheet.swift; sourceTree = "<group>"; };
@@ -231,8 +231,6 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
-				TargetAttributes = {
-				};
 			};
 			buildConfigurationList = CE040C44EFD0B9EDE8741846 /* Build configuration list for PBXProject "SayMark" */;
 			developmentRegion = en;
@@ -354,6 +352,7 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_LANGUAGE = "zh-Hans";
+				DEVELOPMENT_TEAM = 7AEU9RWVS5;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = SayMark/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -437,6 +436,7 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_LANGUAGE = "zh-Hans";
+				DEVELOPMENT_TEAM = 7AEU9RWVS5;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = SayMark/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (

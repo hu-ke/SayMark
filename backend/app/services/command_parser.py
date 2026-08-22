@@ -30,6 +30,7 @@ _SYSTEM_PROMPT_TEMPLATE = (
     "- create_event: 新建日程（有明确时间/日期的安排）。参数 title(日程标题), date(日期 YYYY-MM-DD), time(时间 HH:MM，缺省空), content(日程详情), target_folder_id?(可选目录 id), target_folder?(用户提到的目录名，兜底用)。当用户说「安排/预定/约了/XX点XX分/下周一/明天/X月X号」并且涉及具体时间点时用此 action\n"
     "- append_note: 补充/追加内容到已有笔记或日程。参数 target_id(要补充的文件 id), name(用户提到的文件名，兜底用), content(要补充的新内容)。当用户说「补充/加上/添加到XX」时用此 action\n"
     "- set_reminder: 为日程设置提醒。参数 target_id(日程文件 id), name(日程名称，兜底用), minutes(提前多少分钟提醒，0=取消提醒), recurrence(周期：空=一次性, daily=每天, weekly=每周, monthly=每月), recurrence_end_date(周期结束日期 YYYY-MM-DD，如「到10月第一周」需换算为该周周一的日期)。当用户说「提前XX分钟提醒」「每天提醒」「每周X提醒」「到X月X号为止」时用此 action\n"
+    "- update_schedule: 修改已有日程的时间/日期/提醒/重复属性。参数 target_id(日程文件 id), name(日程名称兜底用), date?(YYYY-MM-DD), time?(HH:MM), reminder_minutes?(提前提醒分钟数，0=取消提醒), repeat_enabled?(是否重复 true/false), repeat_unit?(重复单位 seconds/minutes/hours/days), repeat_value?(重复值数字)。当用户在编辑日程时说「改成XX点」「提前XX分钟」「每小时/每X分钟/每天重复」「取消重复」时用此 action；只有修改正文内容时才用 append_note。\n"
     "- save_place: 保存用户提到的地点到个人地名库。参数 name(地名), lat(纬度数字), lon(经度数字)。当用户说「我在XX」「我家在XX」且你想记住这个地点时用此 action。注意：地名不知道坐标的话凭知识估算大致坐标。\n"
     "- create_folder: 创建文件夹。参数 name, parent_folder_id?(可选父目录 id，缺省顶级), parent_folder?(用户提到的父目录名，兜底用)\n"
     "- rename: 重命名。参数 type(file|folder), target_id(要改的项的 id；找不到留空\"\"), name(用户提到的原名，兜底用), new_name\n"
@@ -133,18 +134,31 @@ async def _build_target_context(file_id: str) -> str:
         return ""
     content = doc.get("content", "") or ""
     name = doc.get("name", "")
+    ftype = doc.get("type", "note")
     # 截取内容前 800 字作为参考
     preview = content[:800]
     if len(content) > 800:
         preview += "\n...(内容已截断)"
+
+    if ftype == "event":
+        action_hint = (
+            f"这是一条日程。用户可能要求调整日程的时间/日期/提前提醒/重复周期，"
+            f"此时必须用 update_schedule(target_id='{file_id}', ...) 更新日程属性；"
+            f"只有用户明确要求修改正文内容时，才用 append_note。"
+        )
+    else:
+        action_hint = (
+            f"请用 append_note(target_id='{file_id}', content='调整指令') 把用户意图传递给后续处理。"
+        )
+
     return (
         f"## 当前编辑目标\n"
-        f"用户正在编辑这篇笔记：\n"
+        f"用户正在编辑这篇{'日程' if ftype == 'event' else '笔记'}：\n"
         f"- id: {file_id}\n"
         f"- 名称: {name}\n"
         f"- 内容预览:\n```\n{preview}\n```\n\n"
-        f"**重要**：用户的所有修改意图都是针对这篇笔记的。"
-        f"请用 append_note(target_id='{file_id}', content='调整指令') 把用户意图传递给后续处理。\n"
+        f"**重要**：用户的所有修改意图都是针对这篇{'日程' if ftype == 'event' else '笔记'}的。"
+        f"{action_hint}\n"
         f"content 字段填入对笔记的具体操作指令（而非原文照抄），例如：\n"
         f"  - 修改：「把时间改为14:00，日期改为2026-08-12」\n"
         f"  - 删除：「删除日期和时间的行」「去掉第二行」\n"

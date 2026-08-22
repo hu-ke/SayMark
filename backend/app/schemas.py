@@ -47,6 +47,18 @@ class ReorderRequest(BaseModel):
     target_id: str
 
 
+class ScheduleUpdate(BaseModel):
+    """日程属性更新（None 表示不改动）。"""
+    date: Optional[str] = None            # YYYY-MM-DD
+    time: Optional[str] = None            # HH:MM
+    reminder_minutes: Optional[int] = None  # 0 表示取消提醒
+    recurrence: Optional[str] = None      # ""/daily/weekly/monthly
+    recurrence_end_date: Optional[str] = None
+    repeat_enabled: Optional[bool] = None
+    repeat_unit: Optional[str] = None     # seconds/minutes/hours/days
+    repeat_value: Optional[int] = None
+
+
 class NoteCreate(BaseModel):
     transcript: str
     target_folder_id: Optional[str] = None  # 缺省存入"未分类"
