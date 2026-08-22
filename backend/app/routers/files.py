@@ -3,7 +3,7 @@
 from fastapi import APIRouter, HTTPException
 
 from .. import pg_ops as crud
-from ..schemas import FileCreate, FileMove, FileResponse, FileUpdate
+from ..schemas import FileCreate, FileMove, FileResponse, FileUpdate, ItemSwap
 
 router = APIRouter(prefix="/api/files", tags=["files"])
 
@@ -24,7 +24,14 @@ async def get_file(file_id: str):
 async def create_file(body: FileCreate):
     """创建文件。"""
     try:
-        return await crud.create_file(body.name, body.content, body.parent_id)
+        return await crud.create_file(
+            body.name, body.content, body.parent_id,
+            file_type=body.type,
+            date=body.date,
+            time=body.time,
+            repeat_interval_value=body.repeat_interval_value,
+            repeat_interval_unit=body.repeat_interval_unit,
+        )
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
 
@@ -59,6 +66,18 @@ async def move_file(file_id: str, body: FileMove):
     if result is None:
         raise HTTPException(status_code=404, detail="文件不存在")
     return result
+
+
+@router.put("/{file_id}/swap")
+async def swap_file(file_id: str, body: ItemSwap):
+    """交换两个文件的排序位置。"""
+    try:
+        ok = await crud.swap_files(int(file_id), int(body.target_id))
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    if not ok:
+        raise HTTPException(status_code=404, detail="文件不存在")
+    return {"success": True}
 
 
 @router.delete("/{file_id}")

@@ -24,6 +24,11 @@ class FileCreate(BaseModel):
     name: str
     content: str
     parent_id: str
+    type: str = "note"  # "note" 或 "event"
+    date: str = ""      # YYYY-MM-DD，仅 event 类型有值
+    time: str = ""      # HH:MM，仅 event 类型有值
+    repeat_interval_value: Optional[int] = None  # 自定义重复间隔值，如 5
+    repeat_interval_unit: Optional[str] = None   # 重复间隔单位：seconds/minutes/hours/days
 
 
 class FileUpdate(BaseModel):
@@ -33,6 +38,14 @@ class FileUpdate(BaseModel):
 
 class FileMove(BaseModel):
     target_folder_id: str
+
+
+class FolderMove(BaseModel):
+    target_folder_id: str
+
+
+class ItemSwap(BaseModel):
+    target_id: str
 
 
 class NoteCreate(BaseModel):

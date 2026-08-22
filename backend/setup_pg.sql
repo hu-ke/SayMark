@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS folders (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     parent_id INTEGER REFERENCES folders(id) ON DELETE CASCADE,
+    sort_order INTEGER DEFAULT 0,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -40,6 +41,7 @@ CREATE TABLE IF NOT EXISTS files (
     recurrence VARCHAR(20) CHECK (recurrence IS NULL OR recurrence IN ('', 'daily', 'weekly', 'monthly')),
     recurrence_end_date DATE,
     embedding FLOAT8[] DEFAULT '{}',
+    sort_order INTEGER DEFAULT 0,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -55,3 +57,20 @@ CREATE INDEX IF NOT EXISTS idx_users_device ON users(device_id);
 
 -- Default "未分类" folder
 INSERT INTO folders (name, parent_id) VALUES ('未分类', NULL) ON CONFLICT DO NOTHING;
+
+-- Migration: add sort_order for existing databases
+ALTER TABLE folders ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0;
+ALTER TABLE files ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0;
+
+-- Backfill sort_order based on existing created_at order within each parent
+UPDATE folders f SET sort_order = sub.rn
+FROM (
+    SELECT id, ROW_NUMBER() OVER (PARTITION BY parent_id ORDER BY created_at) - 1 AS rn
+    FROM folders
+) sub WHERE f.id = sub.id;
+
+UPDATE files f SET sort_order = sub.rn
+FROM (
+    SELECT id, ROW_NUMBER() OVER (PARTITION BY parent_id ORDER BY created_at) - 1 AS rn
+    FROM files
+) sub WHERE f.id = sub.id;

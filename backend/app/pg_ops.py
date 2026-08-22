@@ -54,9 +54,14 @@ async def create_folder(name: str, parent_id: int | None = None) -> dict:
     )
     if existing:
         return existing
+    sort_row = await pg_db.fetchrow(
+        "SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM folders WHERE parent_id IS NOT DISTINCT FROM $1",
+        parent_id,
+    )
+    sort_order = int(sort_row["next"]) if sort_row and sort_row["next"] is not None else 0
     result = await pg_db.execute(
-        "INSERT INTO folders (name, parent_id, created_at, updated_at) VALUES ($1, $2, $3, $3) RETURNING id",
-        name, parent_id, now,
+        "INSERT INTO folders (name, parent_id, sort_order, created_at, updated_at) VALUES ($1, $2, $3, $4, $4) RETURNING id",
+        name, parent_id, sort_order, now,
     )
     new_id = int(result.split()[-1])
     return await pg_db.fetchrow("SELECT id, name, parent_id, created_at, updated_at FROM folders WHERE id=$1", new_id)
@@ -64,19 +69,19 @@ async def create_folder(name: str, parent_id: int | None = None) -> dict:
 
 async def get_folder(folder_id: int) -> dict | None:
     folder_id = int(folder_id)
-    return await pg_db.fetchrow("SELECT id, name, parent_id, created_at, updated_at FROM folders WHERE id=$1", folder_id)
+    return await pg_db.fetchrow("SELECT id, name, parent_id, sort_order, created_at, updated_at FROM folders WHERE id=$1", folder_id)
 
 
 async def list_root_folders() -> list[dict]:
-    return await pg_db.fetch("SELECT id, name, parent_id, created_at, updated_at FROM folders WHERE parent_id IS NULL ORDER BY created_at")
+    return await pg_db.fetch("SELECT id, name, parent_id, created_at, updated_at FROM folders WHERE parent_id IS NULL ORDER BY sort_order, created_at")
 
 
 async def list_children(folder_id: int) -> dict:
     folder_id = int(folder_id)
-    folders = await pg_db.fetch("SELECT id, name, parent_id, created_at, updated_at FROM folders WHERE parent_id=$1 ORDER BY created_at", folder_id)
+    folders = await pg_db.fetch("SELECT id, name, parent_id, created_at, updated_at FROM folders WHERE parent_id=$1 ORDER BY sort_order, created_at", folder_id)
     files = await pg_db.fetch(
         'SELECT id, name, type, date, "time", reminder_minutes, recurrence, recurrence_end_date, created_at, updated_at '
-        "FROM files WHERE parent_id=$1 ORDER BY created_at", folder_id
+        "FROM files WHERE parent_id=$1 ORDER BY sort_order, created_at", folder_id
     )
     return {"folders": folders, "files": files}
 
@@ -125,15 +130,24 @@ async def get_default_uncategorized_folder() -> dict:
 async def create_file(
     name: str, content: str, parent_id: int,
     file_type: str = "note", date: str = "", time: str = "",
+    repeat_interval_value: int | None = None,
+    repeat_interval_unit: str | None = None,
 ) -> dict:
     parent_id = int(parent_id)
     now = _now()
     date_obj = datetime.strptime(date, "%Y-%m-%d").date() if date else None
     time_obj = datetime.strptime(time, "%H:%M").time() if time else None
+    recurrence = None
+    if repeat_interval_value and repeat_interval_unit:
+        recurrence = f"custom:{repeat_interval_value}:{repeat_interval_unit}"
+    sort_row = await pg_db.fetchrow(
+        "SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM files WHERE parent_id=$1", parent_id
+    )
+    sort_order = int(sort_row["next"]) if sort_row and sort_row["next"] is not None else 0
     result = await pg_db.execute(
-        """INSERT INTO files (name, content, parent_id, type, date, "time", created_at, updated_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $7) RETURNING id""",
-        name, content, parent_id, file_type, date_obj, time_obj, now,
+        """INSERT INTO files (name, content, parent_id, type, date, "time", recurrence, sort_order, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9) RETURNING id""",
+        name, content, parent_id, file_type, date_obj, time_obj, recurrence, sort_order, now,
     )
     new_id = int(result.split()[-1])
     return await get_file(new_id)
@@ -142,7 +156,7 @@ async def create_file(
 async def get_file(file_id: int) -> dict | None:
     file_id = int(file_id)
     return await pg_db.fetchrow(
-        'SELECT id, name, content, parent_id, type, date, "time", reminder_minutes, recurrence, recurrence_end_date, created_at, updated_at FROM files WHERE id=$1',
+        'SELECT id, name, content, parent_id, type, date, "time", reminder_minutes, recurrence, recurrence_end_date, sort_order, created_at, updated_at FROM files WHERE id=$1',
         file_id,
     )
 
@@ -173,6 +187,49 @@ async def move_file(file_id: int, target_folder_id: int) -> dict | None:
     if r.endswith("0"):
         return None
     return await get_file(file_id)
+
+
+async def move_folder(folder_id: int, target_folder_id: int) -> dict | None:
+    """移动文件夹到目标文件夹下（parent_id=NULL 表示移到顶级）。"""
+    folder_id = int(folder_id)
+    target_folder_id = int(target_folder_id) if target_folder_id else None
+    now = _now()
+    r = await pg_db.execute("UPDATE folders SET parent_id=$1, updated_at=$2 WHERE id=$3", target_folder_id, now, folder_id)
+    if r.endswith("0"):
+        return None
+    return await get_folder(folder_id)
+
+
+async def swap_folders(folder_id: int, target_id: int) -> bool:
+    """交换两个文件夹的排序位置。"""
+    folder_id = int(folder_id)
+    target_id = int(target_id)
+    a = await get_folder(folder_id)
+    b = await get_folder(target_id)
+    if not a or not b:
+        return False
+    so_a = a.get("sort_order", 0)
+    so_b = b.get("sort_order", 0)
+    now = _now()
+    await pg_db.execute("UPDATE folders SET sort_order=$1, updated_at=$2 WHERE id=$3", so_b, now, folder_id)
+    await pg_db.execute("UPDATE folders SET sort_order=$1, updated_at=$2 WHERE id=$3", so_a, now, target_id)
+    return True
+
+
+async def swap_files(file_id: int, target_id: int) -> bool:
+    """交换两个文件的排序位置。"""
+    file_id = int(file_id)
+    target_id = int(target_id)
+    a = await get_file(file_id)
+    b = await get_file(target_id)
+    if not a or not b:
+        return False
+    so_a = a.get("sort_order", 0)
+    so_b = b.get("sort_order", 0)
+    now = _now()
+    await pg_db.execute("UPDATE files SET sort_order=$1, updated_at=$2 WHERE id=$3", so_b, now, file_id)
+    await pg_db.execute("UPDATE files SET sort_order=$1, updated_at=$2 WHERE id=$3", so_a, now, target_id)
+    return True
 
 
 async def delete_file(file_id: int) -> bool:
@@ -287,10 +344,10 @@ async def add_user_place(device_id: str, name: str, lat: float, lon: float) -> d
 
 async def get_folder_tree() -> list[dict]:
     """返回完整目录树。"""
-    folders = await pg_db.fetch("SELECT id, name, parent_id, created_at, updated_at FROM folders ORDER BY created_at")
+    folders = await pg_db.fetch("SELECT id, name, parent_id, sort_order, created_at, updated_at FROM folders ORDER BY sort_order, created_at")
     files = await pg_db.fetch(
         'SELECT id, name, type, date, "time", reminder_minutes, recurrence, recurrence_end_date, created_at, updated_at, parent_id '
-        "FROM files ORDER BY created_at"
+        "FROM files ORDER BY sort_order, created_at"
     )
 
     folders_by_parent: dict = {}
@@ -308,7 +365,7 @@ async def get_folder_tree() -> list[dict]:
         child_files = files_by_parent.get(fid, [])
         return {**folder_doc, "children": child_folders, "files": child_files}
 
-    roots = sorted(folders_by_parent.get(None, []), key=lambda d: d.get("created_at", ""))
+    roots = sorted(folders_by_parent.get(None, []), key=lambda d: d.get("sort_order", 0))
     return [build_node(r) for r in roots]
 
 

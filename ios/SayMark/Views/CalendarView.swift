@@ -217,6 +217,11 @@ struct CalendarView: View {
     private func eventRow(event: CalendarEvent) -> some View {
         NavigationLink {
             FileDetailView(fileId: event.id, fileName: event.title)
+                .onAppear { treeViewModel.hideFloatingButton = true }
+                .onDisappear {
+                    treeViewModel.hideFloatingButton = false
+                    Task { await treeViewModel.loadTree() }
+                }
         } label: {
             HStack(alignment: .top, spacing: 12) {
                 RoundedRectangle(cornerRadius: 2)
