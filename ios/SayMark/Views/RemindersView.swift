@@ -160,15 +160,18 @@ struct RemindersView: View {
 
     // MARK: - Helpers
     private func formatReminderTime(_ reminder: NoteFile) -> String {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let date = formatter.date(from: reminder.time)
-            ?? ISO8601DateFormatter().date(from: reminder.time)
-            ?? Date()
-
+        let timeStr = reminder.time.count >= 5 ? String(reminder.time.prefix(5)) : reminder.time
         let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
         f.dateFormat = "yyyy-MM-dd HH:mm"
-        return f.string(from: date)
+        guard !reminder.date.isEmpty, !timeStr.isEmpty,
+              let d = f.date(from: "\(reminder.date) \(timeStr)") else {
+            return reminder.date
+        }
+        let out = DateFormatter()
+        out.locale = Locale(identifier: "zh_CN")
+        out.dateFormat = "M月d日 HH:mm"
+        return out.string(from: d)
     }
 
     private func formatMinutes(_ minutes: Int) -> String {
@@ -202,13 +205,11 @@ class RemindersViewModel: ObservableObject {
 
     func deleteReminder(id: String) async {
         do {
-            _ = try await APIClient.shared.requestEmpty(
-                path: "/api/files/\(id)",
-                method: "DELETE"
-            )
-            reminders.removeAll(where: { $0.id == id })
+            _ = try await APIClient.shared.cancelReminder(id: id)
+            await NotificationManager.shared.refreshFromServer()
+            await load()
         } catch {
-            print("deleteReminder error:", error)
+            self.error = error.localizedDescription
         }
     }
 }

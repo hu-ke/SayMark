@@ -52,22 +52,28 @@ struct NoteFile: Codable, Identifiable, Hashable {
 
     /// 从 schedule JSON 解析出的重复描述（秒/分钟/小时/天），无则返回 nil
     var scheduleRepeatLabel: String? {
+        guard let rule = scheduleRepeatRule else { return nil }
+        let unitLabel: String
+        switch rule.unit {
+        case "seconds": unitLabel = "秒"
+        case "minutes": unitLabel = "分钟"
+        case "hours": unitLabel = "小时"
+        case "days": unitLabel = "天"
+        default: unitLabel = rule.unit
+        }
+        return "每 \(rule.value) \(unitLabel)"
+    }
+
+    /// 从 schedule JSON 解析出的重复规则（新格式，启用且有效时返回）
+    var scheduleRepeatRule: ScheduleRepeat? {
         guard let schedule,
               let data = schedule.data(using: .utf8),
               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let repeatObj = obj["repeat"] as? [String: Any],
               let enabled = repeatObj["enabled"] as? Bool, enabled,
-              let unit = repeatObj["unit"] as? String,
-              let value = repeatObj["value"] as? Int else { return nil }
-        let unitLabel: String
-        switch unit {
-        case "seconds": unitLabel = "秒"
-        case "minutes": unitLabel = "分钟"
-        case "hours": unitLabel = "小时"
-        case "days": unitLabel = "天"
-        default: unitLabel = unit
-        }
-        return "每 \(value) \(unitLabel)"
+              let unit = repeatObj["unit"] as? String, !unit.isEmpty,
+              let value = repeatObj["value"] as? Int, value > 0 else { return nil }
+        return ScheduleRepeat(enabled: enabled, unit: unit, value: value)
     }
 
     /// 重复周期显示（优先新 repeat，其次旧 recurrence）

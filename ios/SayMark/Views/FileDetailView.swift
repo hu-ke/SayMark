@@ -221,7 +221,10 @@ struct FileDetailView: View {
         .sheet(isPresented: $showScheduleEdit) {
             if let note = viewModel.note {
                 ScheduleEditSheet(note: note) {
-                    Task { await viewModel.reload() }
+                    Task {
+                        await viewModel.reload()
+                        await NotificationManager.shared.refreshFromServer()
+                    }
                 }
             }
         }
@@ -459,6 +462,7 @@ struct FileDetailView: View {
         do {
             let result = try await APIClient.shared.sendCommand(text: prompt, targetFileId: fileId)
             await viewModel.reload()
+            await NotificationManager.shared.refreshFromServer()
             showToastMessage(result.message)
         } catch {
             showToastMessage(error.localizedDescription)
@@ -945,6 +949,19 @@ struct ScheduleEditSheet: View {
         _repeatValue = State(initialValue: rep.value)
     }
 
+    /// 组合当前选择的日期与时间，得到本次编辑的日程时间点
+    private var eventDate: Date? {
+        let d = Calendar.current.dateComponents([.year, .month, .day], from: date)
+        let t = Calendar.current.dateComponents([.hour, .minute], from: time)
+        var comps = DateComponents()
+        comps.year = d.year
+        comps.month = d.month
+        comps.day = d.day
+        comps.hour = t.hour
+        comps.minute = t.minute
+        return Calendar.current.date(from: comps)
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             HStack {
@@ -1082,6 +1099,11 @@ struct ScheduleEditSheet: View {
     }
 
     private func save() {
+        // 校验：日程时间不能早于当前时间，只能往后调整
+        guard let eventDate, eventDate >= Date() else {
+            errorMessage = "日程时间不能早于当前时间"
+            return
+        }
         isSaving = true
         let payload = ScheduleUpdatePayload(
             date: ScheduleDateHelper.dateString(date),

@@ -70,6 +70,11 @@ def _position_order() -> str:
     return "position, created_at" if _HAS_POSITION else "created_at"
 
 
+def _schedule_col() -> str:
+    """返回 schedule 列片段，缺失该列时返回空串。"""
+    return ", schedule" if _HAS_SCHEDULE else ""
+
+
 # ----------------------------- 文件夹 -----------------------------
 
 
@@ -117,8 +122,8 @@ async def list_children(folder_id: int) -> dict:
         f"SELECT id, name, parent_id, created_at, updated_at FROM folders WHERE parent_id=$1 ORDER BY {order}", folder_id
     )
     files = await pg_db.fetch(
-        'SELECT id, name, type, date, "time", reminder_minutes, recurrence, recurrence_end_date, created_at, updated_at '
-        f"FROM files WHERE parent_id=$1 ORDER BY {order}", folder_id
+        'SELECT id, name, type, date, "time", reminder_minutes, recurrence, recurrence_end_date, created_at, updated_at'
+        f"{_schedule_col()} FROM files WHERE parent_id=$1 ORDER BY {order}", folder_id
     )
     return {"folders": folders, "files": files}
 
@@ -521,8 +526,8 @@ async def get_folder_tree() -> list[dict]:
     order = _position_order()
     folders = await pg_db.fetch(f"SELECT id, name, parent_id, created_at, updated_at FROM folders ORDER BY {order}")
     files = await pg_db.fetch(
-        'SELECT id, name, type, date, "time", reminder_minutes, recurrence, recurrence_end_date, created_at, updated_at, parent_id '
-        f"FROM files ORDER BY {order}"
+        'SELECT id, name, type, date, "time", reminder_minutes, recurrence, recurrence_end_date, created_at, updated_at, parent_id'
+        f"{_schedule_col()} FROM files ORDER BY {order}"
     )
 
     folders_by_parent: dict = {}
@@ -629,8 +634,8 @@ async def find_files_by_date(date: str) -> list[dict]:
     """列出某天的事件（按 time 排序）。"""
     target_date = datetime.strptime(date, "%Y-%m-%d").date()
     return await pg_db.fetch(
-        'SELECT id, name, content, parent_id, type, date, "time", reminder_minutes, recurrence, recurrence_end_date, created_at, updated_at '
-        'FROM files WHERE type=$1 AND date=$2 ORDER BY "time"',
+        'SELECT id, name, content, parent_id, type, date, "time", reminder_minutes, recurrence, recurrence_end_date, created_at, updated_at'
+        f"{_schedule_col()} FROM files WHERE type=$1 AND date=$2 ORDER BY \"time\"",
         "event", target_date,
     )
 
@@ -648,6 +653,6 @@ async def find_files_by_month(year: int, month: int) -> list[dict]:
 async def find_files_with_reminders() -> list[dict]:
     """列出所有有提醒的文件。"""
     return await pg_db.fetch(
-        'SELECT id, name, content, parent_id, type, date, "time", reminder_minutes, recurrence, recurrence_end_date, created_at, updated_at '
-        "FROM files WHERE reminder_minutes IS NOT NULL AND reminder_minutes > 0 ORDER BY date"
+        'SELECT id, name, content, parent_id, type, date, "time", reminder_minutes, recurrence, recurrence_end_date, created_at, updated_at'
+        f"{_schedule_col()} FROM files WHERE reminder_minutes IS NOT NULL AND reminder_minutes > 0 ORDER BY date"
     )

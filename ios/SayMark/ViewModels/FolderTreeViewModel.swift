@@ -54,6 +54,9 @@ final class FolderTreeViewModel: ObservableObject {
         do {
             _ = try await api.createFile(name: name, content: content, parentId: parentId, type: type, schedule: schedule)
             await loadTree()
+            if schedule != nil || type == "event" {
+                await NotificationManager.shared.refreshFromServer()
+            }
         } catch {
             self.error = error.localizedDescription
         }
@@ -72,6 +75,7 @@ final class FolderTreeViewModel: ObservableObject {
         do {
             try await api.deleteFile(id: id)
             await loadTree()
+            await NotificationManager.shared.refreshFromServer()
         } catch {
             self.error = error.localizedDescription
         }

@@ -42,43 +42,64 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
 
             let triggerDate = eventDate.addingTimeInterval(-Double(minutes) * 60)
             let body = bodyPreview(from: item)
-            let rc = item.recurrence ?? ""
 
-            // 解析结束日期
             var endDate: Date? = nil
             if !item.recurrenceEndDate.isEmpty {
                 endDate = dateOnlyFmt.date(from: item.recurrenceEndDate)
             }
 
-            if rc.isEmpty {
-                // 一次性
-                if triggerDate.timeIntervalSinceNow > 0 {
-                    schedule(id: item.id, title: item.name, body: body, at: triggerDate, rc: nil)
-                }
+            // 优先新格式重复（秒/分钟/小时/天），其次旧 recurrence（每天/每周/每月）
+            if let rule = item.scheduleRepeatRule {
+                scheduleSeries(id: item.id, title: item.name, body: body, first: triggerDate,
+                               step: { self.nextDate(after: $0, rule: rule) }, endDate: endDate)
             } else {
-                // 周期性：逐个调度，直到结束日期或达到上限
-                var cursor = triggerDate
-                var idx = 0
-                let maxCount = 100  // 安全上限
-                while idx < maxCount {
-                    if cursor.timeIntervalSinceNow > 0 {
-                        schedule(id: "\(item.id)-\(idx)", title: item.name, body: body, at: cursor, rc: nil)
+                let rc = item.recurrence ?? ""
+                if rc.isEmpty {
+                    if triggerDate.timeIntervalSinceNow > 0 {
+                        schedule(id: item.id, title: item.name, body: body, at: triggerDate)
                     }
-                    // 计算下一次
-                    guard let next = advance(cursor, by: rc) else { break }
-                    cursor = next
-                    // 检查是否超过结束日期
-                    if let end = endDate, cal.compare(cursor, to: end, toGranularity: .day) == .orderedDescending {
-                        break
-                    }
-                    idx += 1
+                } else {
+                    scheduleSeries(id: item.id, title: item.name, body: body, first: triggerDate,
+                                   step: { self.advance($0, by: rc) }, endDate: endDate)
                 }
             }
         }
     }
 
+    /// 从后端拉取最新提醒并重新调度（供创建/编辑/删除日程后调用）
+    func refreshFromServer() async {
+        let settings = await center.notificationSettings()
+        switch settings.authorizationStatus {
+        case .authorized, .provisional, .ephemeral:
+            break
+        default:
+            return
+        }
+        guard let notes = try? await APIClient.shared.getReminderNotes() else { return }
+        await scheduleNotifications(from: notes)
+    }
+
+    /// 调度一系列周期性通知：从首次触发开始，按 step 推进，直到结束日期或上限
+    private func scheduleSeries(id: String, title: String, body: String, first: Date,
+                                step: (Date) -> Date?, endDate: Date?) {
+        var cursor = first
+        var idx = 0
+        let maxCount = 64  // iOS 本地通知待处理上限
+        while idx < maxCount {
+            if cursor.timeIntervalSinceNow > 0 {
+                schedule(id: "\(id)-\(idx)", title: title, body: body, at: cursor)
+            }
+            guard let next = step(cursor) else { break }
+            cursor = next
+            if let end = endDate, cal.compare(cursor, to: end, toGranularity: .day) == .orderedDescending {
+                break
+            }
+            idx += 1
+        }
+    }
+
     /// 调度单个通知（一次性，精确到分钟）
-    private func schedule(id: String, title: String, body: String, at date: Date, rc _: String?) {
+    private func schedule(id: String, title: String, body: String, at date: Date) {
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body
@@ -95,12 +116,23 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         }
     }
 
-    /// 按周期推进日期
+    /// 按周期推进日期（旧 recurrence：每天/每周/每月）
     private func advance(_ date: Date, by recurrence: String) -> Date? {
         switch recurrence {
         case "daily":  return cal.date(byAdding: .day, value: 1, to: date)
         case "weekly": return cal.date(byAdding: .weekOfYear, value: 1, to: date)
         case "monthly": return cal.date(byAdding: .month, value: 1, to: date)
+        default: return nil
+        }
+    }
+
+    /// 按新格式重复规则推进日期（秒/分钟/小时/天）
+    private func nextDate(after date: Date, rule: ScheduleRepeat) -> Date? {
+        switch rule.unit {
+        case "seconds": return cal.date(byAdding: .second, value: rule.value, to: date)
+        case "minutes": return cal.date(byAdding: .minute, value: rule.value, to: date)
+        case "hours": return cal.date(byAdding: .hour, value: rule.value, to: date)
+        case "days": return cal.date(byAdding: .day, value: rule.value, to: date)
         default: return nil
         }
     }
