@@ -408,7 +408,8 @@ struct FolderCard: View {
             .buttonStyle(.plain)
             .background(UIConstants.card)
             .offset(x: swipedRow == node.id ? -72 : 0)
-            .simultaneousGesture(
+            .draggable(DragPayload.folder(node.id))
+            .highPriorityGesture(
                 DragGesture(minimumDistance: 20)
                     .onEnded { value in
                         let w = value.translation.width
@@ -420,7 +421,6 @@ struct FolderCard: View {
                         }
                     }
             )
-            .draggable(DragPayload.folder(node.id))
             .dropDestination(for: String.self) { items, _ in
                 guard let payload = items.first else { return false }
                 Task { await viewModel.handleDrop(payload: payload, targetFolderId: node.id) }
@@ -517,7 +517,7 @@ struct SubFolderRow: View {
                 .buttonStyle(.plain)
                 .background(UIConstants.card)
                 .offset(x: swipedRow == node.id ? -72 : 0)
-                .simultaneousGesture(
+                .highPriorityGesture(
                     DragGesture(minimumDistance: 20)
                         .onEnded { value in
                             let w = value.translation.width
@@ -622,7 +622,7 @@ struct FileRowCard: View {
                 .background(UIConstants.card)
                 .offset(x: isSwiped ? -72 : 0)
                 .draggable(DragPayload.file(file.id))
-                .simultaneousGesture(
+                .highPriorityGesture(
                     DragGesture(minimumDistance: 20)
                         .onEnded { value in
                             let w = value.translation.width
