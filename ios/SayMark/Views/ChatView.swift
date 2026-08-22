@@ -11,6 +11,8 @@ struct ChatView: View {
     @State private var textEditContent = ""
     @State private var hasSentInitial = false
     @State private var isVoiceMode = true
+    @State private var isPressingMic = false
+    @StateObject private var speechRecognizer = SpeechRecognizer()
 
     @FocusState private var isFocused: Bool
 
@@ -161,20 +163,23 @@ struct ChatView: View {
 
                 // Center: voice button or text field
                 if isVoiceMode {
-                    Button {
-                        textEditOpen = true
-                        textEditContent = ""
-                    } label: {
-                        Text("按住 说话")
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundColor(UIConstants.label2)
-                            .kerning(-0.24)
-                    }
-                    .frame(maxWidth: .infinity, minHeight: 36)
-                    .background(Color.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                    .overlay(RoundedRectangle(cornerRadius: 8)
-                        .stroke(Color(red: 0.235, green: 0.235, blue: 0.263).opacity(0.2), lineWidth: 1))
+                    Text(isPressingMic ? "松开发送" : "按住 说话")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(isPressingMic ? .white : UIConstants.label2)
+                        .kerning(-0.24)
+                        .frame(maxWidth: .infinity, minHeight: 36)
+                        .background(isPressingMic ? UIConstants.blue : Color.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .overlay(RoundedRectangle(cornerRadius: 8)
+                            .stroke(isPressingMic ? UIConstants.blue : Color(red: 0.235, green: 0.235, blue: 0.263).opacity(0.2), lineWidth: 1))
+                        .contentShape(Rectangle())
+                        .onLongPressGesture(minimumDuration: 0.2, maximumDistance: 60, perform: {}, onPressingChanged: { pressing in
+                            if pressing {
+                                startVoice()
+                            } else {
+                                stopVoice()
+                            }
+                        })
                 } else {
                     HStack {
                         TextField("输入消息...", text: $inputText)
@@ -411,6 +416,20 @@ struct ChatView: View {
             }
             .ignoresSafeArea(edges: .bottom)
         }
+    }
+
+    // MARK: - Voice
+    private func startVoice() {
+        isPressingMic = true
+        Task { await speechRecognizer.startRecording() }
+    }
+
+    private func stopVoice() {
+        isPressingMic = false
+        speechRecognizer.stopRecording()
+        let text = speechRecognizer.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        Task { await viewModel.send(text) }
     }
 
     // MARK: - Send

@@ -5,7 +5,7 @@
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from . import pg_ops
@@ -33,16 +33,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 挂载路由
-app.include_router(folders.router)
-app.include_router(files.router)
-app.include_router(notes.router)
-app.include_router(ai.router)
-app.include_router(events.router)
-app.include_router(reminders.router)
-app.include_router(reorder.router)
-app.include_router(geo.router)
-app.include_router(user.router)
+# 所有业务路由统一挂在 /saymark-service 前缀下（配合部署/本机调试 baseURL）
+service = APIRouter(prefix="/saymark-service")
+service.include_router(folders.router)
+service.include_router(files.router)
+service.include_router(notes.router)
+service.include_router(ai.router)
+service.include_router(events.router)
+service.include_router(reminders.router)
+service.include_router(reorder.router)
+service.include_router(geo.router)
+service.include_router(user.router)
+app.include_router(service)
 
 
 @app.get("/")
