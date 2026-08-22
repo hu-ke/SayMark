@@ -216,8 +216,7 @@ _AGENT_SYSTEM_PROMPT = f"""\
 5. **创建日程 + 提醒必须分两步**：在同一组 tool_calls 中先 create_event，再 set_reminder（用 name 引用刚创建的日程名）。只创建日程不设置提醒是不够的。
 6. set_reminder 引用刚创建的日程时，用 name 参数传入日程标题，不要用 id（此时还没有 id）。系统会按名称自动匹配。
 7. **创建笔记时禁止添油加醋**：用户说「记一下：今天买了苹果」→ content="今天买了苹果"（只修正错别字和格式），**不要**扩展成「今天买了苹果，苹果富含维生素…」之类的废话。你只是帮用户整理，不是代用户写作。
-8. **创建数量限制**：单次对话最多只能创建 5 个文件/文件夹/日程（create_note、create_event、create_folder 合计）。若用户要求创建超过 5 个（如「新建1000个文件」），不要调用创建工具，直接输出 done 并在 reply 中说明「超出单次创建上限（最多5个），请分批操作」。
-9. 只输出 JSON，不要 markdown 代码块。"""
+8. 只输出 JSON，不要 markdown 代码块。"""
 
 _MAX_AGENT_ITERATIONS = 5  # agent 循环最大迭代次数
 
@@ -372,7 +371,7 @@ async def chat_stream(body: ChatRequest):
             return _think_step(text)
 
         # 2. 构建 agent 上下文（目录树 + 日期过滤 + 语义搜索）
-        yield _step("正在检索相关文件和笔记...")
+        yield _step("🔍 正在检索相关文件和笔记...")
         agent_context = await command_parser.build_agent_context(text)
         location_note = await _build_location_note(user_lat, user_lon, device_id)
 
@@ -381,14 +380,8 @@ async def chat_stream(body: ChatRequest):
         if pending_steps is not None:
             if _is_confirm(text):
                 created: dict[str, str] = {}
-                created_count = 0
                 for step in pending_steps:
                     label = _action_label(step)
-                    if step.get("action") in ("create_note", "create_event", "create_folder"):
-                        if created_count >= command_executor.MAX_CREATE_PER_COMMAND:
-                            yield _step(f"{label} → 已达单次创建上限（最多 {command_executor.MAX_CREATE_PER_COMMAND} 个）")
-                            break
-                        created_count += 1
                     command_executor.set_device_id(device_id)
                     r = await command_executor.execute(step)
                     if r.get("success"):
@@ -427,7 +420,6 @@ async def chat_stream(body: ChatRequest):
         # 5. Agent 循环：Think → Act → Observe
         yield _step("AI 正在分析请求...")
         final_reply: str | None = None
-        created_count = 0  # 单次对话已创建的文件/文件夹数量
 
         for iteration in range(_MAX_AGENT_ITERATIONS):
             try:
@@ -465,16 +457,6 @@ async def chat_stream(body: ChatRequest):
                 for tc in tool_calls:
                     step = _tool_call_to_step(tc)
                     label = _action_label(step)
-
-                    # 单次对话创建数量上限，防止「新建 1000 个文件」这类滥用
-                    if step.get("action") in ("create_note", "create_event", "create_folder"):
-                        if created_count >= command_executor.MAX_CREATE_PER_COMMAND:
-                            result = {"action": step.get("action"), "success": False,
-                                      "message": f"已达单次创建上限（最多 {command_executor.MAX_CREATE_PER_COMMAND} 个）"}
-                            results.append(result)
-                            yield _step(f"{label} → {result['message']}")
-                            continue
-                        created_count += 1
 
                     command_executor.set_device_id(device_id)
                     result = await command_executor.execute(step)

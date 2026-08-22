@@ -10,11 +10,6 @@ from .. import pg_ops as db
 from . import note_generator, qwen
 
 
-# 单次指令最多允许创建的文件/文件夹数量
-MAX_CREATE_PER_COMMAND = 5
-_CREATE_ACTIONS = {"create_note", "create_event", "create_folder"}
-
-
 async def _store_embedding(file_id: int, title: str, content: str) -> None:
     """为文件生成并存储 embedding 向量。"""
     try:
@@ -92,21 +87,8 @@ async def execute(parsed: dict) -> dict:
 
 async def execute_steps(steps: list[dict]) -> dict:
     """按顺序执行多步骤指令。"""
-    if not steps:
-        return _result("multi", True, "没有需要执行的操作", [])
     if len(steps) == 1:
         return await execute(steps[0])
-
-    # 单次指令创建数量上限，防止「新建 1000 个文件」这类滥用
-    create_count = sum(1 for s in steps if s.get("action") in _CREATE_ACTIONS)
-    if create_count > MAX_CREATE_PER_COMMAND:
-        return _result(
-            "multi", False,
-            f"一次指令最多只能创建 {MAX_CREATE_PER_COMMAND} 个文件/文件夹，"
-            f"本次请求创建 {create_count} 个，请分批操作",
-            [],
-        )
-
     results: list[dict] = []
     created_folders: dict[str, int] = {}
     for step in steps:

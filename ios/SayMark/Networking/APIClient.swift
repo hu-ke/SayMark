@@ -122,37 +122,18 @@ final class APIClient {
         try await requestEmpty(path: "/api/folders/\(id)", method: "DELETE")
     }
 
-    func moveFolder(id: String, targetFolderId: String) async throws {
-        struct Body: Encodable { let target_folder_id: String }
-        try await requestEmpty(path: "/api/folders/\(id)/move", method: "PUT",
-                               body: Body(target_folder_id: targetFolderId))
-    }
-
-    func swapFolder(id: String, targetId: String) async throws {
-        struct Body: Encodable { let target_id: String }
-        try await requestEmpty(path: "/api/folders/\(id)/swap", method: "PUT",
-                               body: Body(target_id: targetId))
-    }
-
     // MARK: - 文件
 
     func getFile(id: String) async throws -> NoteFile {
         try await request(path: "/api/files/\(id)", method: "GET")
     }
 
-    func createFile(name: String, content: String, parentId: String,
-                    type: String = "note", date: String = "", time: String = "",
-                    repeatIntervalValue: Int? = nil, repeatIntervalUnit: String? = nil) async throws -> NoteFile {
+    func createFile(name: String, content: String, parentId: String) async throws -> NoteFile {
         struct Body: Encodable {
             let name: String; let content: String; let parent_id: String
-            let type: String; let date: String; let time: String
-            let repeat_interval_value: Int?; let repeat_interval_unit: String?
         }
         return try await request(path: "/api/files", method: "POST",
-                                 body: Body(name: name, content: content, parent_id: parentId,
-                                            type: type, date: date, time: time,
-                                            repeat_interval_value: repeatIntervalValue,
-                                            repeat_interval_unit: repeatIntervalUnit))
+                                 body: Body(name: name, content: content, parent_id: parentId))
     }
 
     func renameFile(id: String, name: String?) async throws {
@@ -174,12 +155,6 @@ final class APIClient {
         struct Body: Encodable { let target_folder_id: String }
         try await requestEmpty(path: "/api/files/\(id)/move", method: "PUT",
                                body: Body(target_folder_id: targetFolderId))
-    }
-
-    func swapFile(id: String, targetId: String) async throws {
-        struct Body: Encodable { let target_id: String }
-        try await requestEmpty(path: "/api/files/\(id)/swap", method: "PUT",
-                               body: Body(target_id: targetId))
     }
 
     // MARK: - 笔记与 AI 指令

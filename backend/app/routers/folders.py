@@ -5,7 +5,7 @@ from typing import List
 from fastapi import APIRouter, HTTPException
 
 from .. import pg_ops as crud
-from ..schemas import FolderCreate, FolderMove, FolderResponse, FolderTreeNode, FolderUpdate, ItemSwap
+from ..schemas import FolderCreate, FolderResponse, FolderTreeNode, FolderUpdate
 
 router = APIRouter(prefix="/api/folders", tags=["folders"])
 
@@ -45,29 +45,5 @@ async def delete_folder(folder_id: str):
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
     if not deleted:
-        raise HTTPException(status_code=404, detail="文件夹不存在")
-    return {"success": True}
-
-
-@router.put("/{folder_id}/move", response_model=FolderResponse)
-async def move_folder(folder_id: str, body: FolderMove):
-    """移动文件夹到目标文件夹。"""
-    try:
-        result = await crud.move_folder(int(folder_id), int(body.target_folder_id))
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
-    if result is None:
-        raise HTTPException(status_code=404, detail="文件夹不存在")
-    return result
-
-
-@router.put("/{folder_id}/swap")
-async def swap_folder(folder_id: str, body: ItemSwap):
-    """交换两个文件夹的排序位置。"""
-    try:
-        ok = await crud.swap_folders(int(folder_id), int(body.target_id))
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
-    if not ok:
         raise HTTPException(status_code=404, detail="文件夹不存在")
     return {"success": True}

@@ -16,7 +16,6 @@ struct FolderTreeView: View {
     @State private var deleteIsFolder = false
     @State private var addPopoverFolderId: String? = nil
     @State private var addPopoverFolderName: String = ""
-    @State private var addButtonPositions: [String: CGFloat] = [:]
     @State private var pushNewItemParentId: String? = nil
     @State private var pushNewItemType: String? = nil
 
@@ -72,16 +71,11 @@ struct FolderTreeView: View {
                 ) { EmptyView() }
             )
         }
-        .coordinateSpace(name: "folderTree")
-        .onPreferenceChange(AddButtonYKey.self) { positions in
-            addButtonPositions = positions
-        }
         // 文件夹添加菜单浮层
         .overlay {
             if let folderId = addPopoverFolderId {
                 FolderAddMenuOverlay(
                     folderName: addPopoverFolderName,
-                    yPosition: addButtonPositions[folderId] ?? 0,
                     onDismiss: { addPopoverFolderId = nil },
                     onAddFile: {
                         addPopoverFolderId = nil
@@ -322,7 +316,6 @@ struct FolderCard: View {
             }
         }
         .cardStyle()
-        .onDrop(of: [.text], delegate: FolderDropDelegate(targetFolderId: node.id, viewModel: viewModel))
         .sheet(isPresented: $showRenameSheet) {
             RenameSheet(
                 title: "重命名文件夹",
@@ -373,12 +366,6 @@ struct FolderCard: View {
                         )
                 }
                 .buttonStyle(.plain)
-                .background(
-                    GeometryReader { geo in
-                        Color.clear.preference(key: AddButtonYKey.self,
-                                               value: [node.id: geo.frame(in: .named("folderTree")).midY])
-                    }
-                )
                 Image(systemName: "chevron.right")
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(UIConstants.label3)
@@ -398,14 +385,41 @@ struct FolderCard: View {
                     }
                 }
         )
-        .onDrag {
-            NSItemProvider(object: "\(node.id):folder:\(node.name)" as NSString)
+        .contextMenu {
+            Button {
+                deleteTargetId = node.id
+                deleteTargetName = node.name
+                deleteIsFolder = true
+                showDeleteAlert = true
+            } label: {
+                Label("删除", systemImage: "trash")
+            }
+            Button {
+                showRenameSheet = true
+            } label: {
+                Label("重命名", systemImage: "pencil")
+            }
         }
     }
 
     private func swipeActions(for id: String, name: String, isFolder: Bool) -> some View {
         HStack(spacing: 0) {
             Spacer()
+            Button {
+                swipedRow = nil
+                showRenameSheet = true
+            } label: {
+                VStack(spacing: 3) {
+                    Image(systemName: "pencil")
+                        .font(.system(size: 14))
+                    Text("重命名")
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                .foregroundColor(.white)
+                .frame(width: 72, height: 44)
+                .background(UIConstants.blue)
+            }
+
             Button {
                 deleteTargetId = id
                 deleteTargetName = name
@@ -484,12 +498,6 @@ struct SubFolderRow: View {
                             )
                     }
                     .buttonStyle(.plain)
-                    .background(
-                        GeometryReader { geo in
-                            Color.clear.preference(key: AddButtonYKey.self,
-                                                   value: [node.id: geo.frame(in: .named("folderTree")).midY])
-                        }
-                    )
                     Image(systemName: "chevron.right")
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(UIConstants.label3)
@@ -501,13 +509,37 @@ struct SubFolderRow: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .onDrag {
-                NSItemProvider(object: "\(node.id):folder:\(node.name)" as NSString)
+            .contextMenu {
+                Button {
+                    deleteTargetId = node.id
+                    deleteTargetName = node.name
+                    deleteIsFolder = true
+                    showDeleteAlert = true
+                } label: {
+                    Label("删除", systemImage: "trash")
+                }
+                Button {
+                    showRenameSheet = true
+                } label: {
+                    Label("重命名", systemImage: "pencil")
+                }
             }
 
             if swipedRow == node.id {
                 HStack(spacing: 0) {
                     Spacer()
+                    Button {
+                        swipedRow = nil
+                        showRenameSheet = true
+                    } label: {
+                        VStack(spacing: 3) {
+                            Image(systemName: "pencil").font(.system(size: 14))
+                            Text("重命名").font(.system(size: 12, weight: .semibold))
+                        }
+                        .foregroundColor(.white)
+                        .frame(width: 72, height: 44)
+                        .background(UIConstants.blue)
+                    }
                     Button {
                         deleteTargetId = node.id
                         deleteTargetName = node.name
@@ -544,7 +576,6 @@ struct SubFolderRow: View {
             }
         }
         .background(UIConstants.card)
-        .onDrop(of: [.text], delegate: FolderDropDelegate(targetFolderId: node.id, viewModel: viewModel))
         .sheet(isPresented: $showRenameSheet) {
             RenameSheet(title: "重命名文件夹", currentName: node.name) { newName in
                 Task { await viewModel.renameFolder(id: node.id, name: newName) }
@@ -572,11 +603,6 @@ struct FileRowCard: View {
 
             NavigationLink {
                 FileDetailView(fileId: file.id, fileName: file.name)
-                    .onAppear { viewModel.hideFloatingButton = true }
-                    .onDisappear {
-                        viewModel.hideFloatingButton = false
-                        Task { await viewModel.loadTree() }
-                    }
             } label: {
                 HStack(spacing: 12) {
                     RowIcon(
@@ -593,9 +619,6 @@ struct FileRowCard: View {
                                 .frame(maxWidth: .infinity, alignment: .leading)
                             if file.isEvent {
                                 CapsuleBadge(text: "日程")
-                                if file.isRecurring {
-                                    CapsuleBadge(text: "重复", color: Color(red: 0.686, green: 0.322, blue: 0.871))
-                                }
                             }
                         }
                         Text(formatTime(file.createdAt))
@@ -621,17 +644,40 @@ struct FileRowCard: View {
                         }
                     }
             )
-            .onDrag {
-                NSItemProvider(object: "\(file.id):file:\(file.name)" as NSString)
+            .contextMenu {
+                Button {
+                    deleteTargetId = file.id
+                    deleteTargetName = file.name
+                    deleteIsFolder = false
+                    showDeleteAlert = true
+                } label: {
+                    Label("删除", systemImage: "trash")
+                }
+                Button {
+                    showRenameSheet = true
+                } label: {
+                    Label("重命名", systemImage: "pencil")
+                }
             }
 
             if isSwiped {
                 HStack(spacing: 0) {
                     Spacer()
                     Button {
+                        swipedRow = nil
+                        showRenameSheet = true
+                    } label: {
+                        VStack(spacing: 3) {
+                            Image(systemName: "pencil").font(.system(size: 13))
+                            Text("重命名").font(.system(size: 12, weight: .semibold))
+                        }
+                        .foregroundColor(.white)
+                        .frame(width: 72, height: 44)
+                        .background(UIConstants.blue)
+                    }
+                    Button {
                         deleteTargetId = file.id
                         deleteTargetName = file.name
-                        deleteIsFolder = false
                         showDeleteAlert = true
                         swipedRow = nil
                     } label: {
@@ -648,7 +694,6 @@ struct FileRowCard: View {
             }
         }
         .background(UIConstants.card)
-        .onDrop(of: [.text], delegate: FileSwapDropDelegate(targetFileId: file.id, viewModel: viewModel))
         .sheet(isPresented: $showRenameSheet) {
             RenameSheet(title: "重命名文件", currentName: file.name) { newName in
                 Task { await viewModel.renameFile(id: file.id, name: newName) }
@@ -754,178 +799,93 @@ struct DeleteConfirmDialog: View {
 // MARK: - Folder Add Menu Overlay (matches "iOS App UI Redesign" SCREEN 1)
 struct FolderAddMenuOverlay: View {
     let folderName: String
-    var yPosition: CGFloat = 0
     let onDismiss: () -> Void
     let onAddFile: () -> Void
     let onNewDir: () -> Void
 
-    private let cardHeight: CGFloat = 190
-
     var body: some View {
-        GeometryReader { geo in
-            ZStack {
-                // Invisible backdrop to dismiss
-                Color.black.opacity(0.01)
-                    .ignoresSafeArea()
-                    .onTapGesture { onDismiss() }
+        ZStack {
+            // Invisible backdrop to dismiss
+            Color.black.opacity(0.01)
+                .ignoresSafeArea()
+                .onTapGesture { onDismiss() }
 
-                // Popover card — positioned near the "+" button
-                VStack {
-                    HStack {
-                        Spacer()
-                        card
-                            .padding(.trailing, 16)
-                    }
-                    .offset(y: cardTopY(screenHeight: geo.size.height))
+            // Popover card — positioned top-right
+            VStack {
+                HStack {
                     Spacer()
+                    VStack(spacing: 0) {
+                        // Header
+                        HStack {
+                            Text("添加到「\(folderName)」")
+                                .font(.system(size: 12))
+                                .foregroundColor(UIConstants.label3)
+                                .fontWeight(.medium)
+                            Spacer()
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+
+                        Rectangle()
+                            .fill(UIConstants.separator)
+                            .frame(height: 0.5)
+
+                        // Option: 添加文件
+                        Button(action: onAddFile) {
+                            HStack(spacing: 12) {
+                                RowIcon(systemName: "doc.text.fill", color: UIConstants.label3)
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text("添加文件")
+                                        .font(.system(size: 15, weight: .medium))
+                                        .foregroundColor(UIConstants.label)
+                                    Text("创建新笔记")
+                                        .font(.system(size: 12))
+                                        .foregroundColor(UIConstants.label3)
+                                }
+                                Spacer()
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 13)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+
+                        Rectangle()
+                            .fill(UIConstants.separator)
+                            .frame(height: 0.5)
+
+                        // Option: 新建目录
+                        Button(action: onNewDir) {
+                            HStack(spacing: 12) {
+                                RowIcon(systemName: "folder.fill", color: UIConstants.blue)
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text("新建目录")
+                                        .font(.system(size: 15, weight: .medium))
+                                        .foregroundColor(UIConstants.label)
+                                    Text("在此文件夹下创建子目录")
+                                        .font(.system(size: 12))
+                                        .foregroundColor(UIConstants.label3)
+                                }
+                                Spacer()
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 13)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .frame(width: 260)
+                    .background(
+                        Color.white.opacity(0.96)
+                            .background(Material.regular)
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                    .shadow(color: .black.opacity(0.18), radius: 16, y: 4)
+                    .padding(.trailing, 16)
+                    .padding(.top, 12)
                 }
-            }
-        }
-    }
-
-    private func cardTopY(screenHeight: CGFloat) -> CGFloat {
-        // 加号下方有空间则显示在下方，否则显示在上方
-        let below = yPosition + 16
-        if below + cardHeight <= screenHeight {
-            return below
-        }
-        return max(yPosition - cardHeight - 16, 8)
-    }
-
-    private var card: some View {
-        VStack(spacing: 0) {
-            // Header
-            HStack {
-                Text("添加到「\(folderName)」")
-                    .font(.system(size: 12))
-                    .foregroundColor(UIConstants.label3)
-                    .fontWeight(.medium)
                 Spacer()
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-
-            Rectangle()
-                .fill(UIConstants.separator)
-                .frame(height: 0.5)
-
-            // Option: 添加文件
-            Button(action: onAddFile) {
-                HStack(spacing: 12) {
-                    RowIcon(systemName: "doc.text.fill", color: UIConstants.label3)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text("添加文件")
-                            .font(.system(size: 15, weight: .medium))
-                            .foregroundColor(UIConstants.label)
-                        Text("创建新笔记")
-                            .font(.system(size: 12))
-                            .foregroundColor(UIConstants.label3)
-                    }
-                    Spacer()
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 13)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-
-            Rectangle()
-                .fill(UIConstants.separator)
-                .frame(height: 0.5)
-
-            // Option: 新建目录
-            Button(action: onNewDir) {
-                HStack(spacing: 12) {
-                    RowIcon(systemName: "folder.fill", color: UIConstants.blue)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text("新建目录")
-                            .font(.system(size: 15, weight: .medium))
-                            .foregroundColor(UIConstants.label)
-                        Text("在此文件夹下创建子目录")
-                            .font(.system(size: 12))
-                            .foregroundColor(UIConstants.label3)
-                    }
-                    Spacer()
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 13)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
         }
-        .frame(width: 260)
-        .background(
-            Color.white.opacity(0.96)
-                .background(Material.regular)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-        .shadow(color: .black.opacity(0.18), radius: 16, y: 4)
-    }
-}
-
-// MARK: - Drop Delegate for Drag & Drop
-struct FolderDropDelegate: DropDelegate {
-    let targetFolderId: String
-    let viewModel: FolderTreeViewModel
-
-    func performDrop(info: DropInfo) -> Bool {
-        let providers = info.itemProviders(for: [.text])
-        guard let provider = providers.first else { return false }
-
-        provider.loadItem(forTypeIdentifier: "public.text", options: nil) { (data, error) in
-            guard let data = data as? Data,
-                  let str = String(data: data, encoding: .utf8) else { return }
-            let parts = str.components(separatedBy: ":")
-            guard parts.count >= 2 else { return }
-            let draggedId = parts[0]
-            let type = parts[1]
-            // Don't drop on itself
-            guard draggedId != targetFolderId else { return }
-
-            Task { @MainActor in
-                if type == "file" {
-                    await viewModel.moveFile(id: draggedId, targetFolderId: targetFolderId)
-                } else if type == "folder" {
-                    await viewModel.swapFolder(id: draggedId, targetId: targetFolderId)
-                }
-            }
-        }
-        return true
-    }
-}
-
-// MARK: - Drop Delegate for swapping files
-struct FileSwapDropDelegate: DropDelegate {
-    let targetFileId: String
-    let viewModel: FolderTreeViewModel
-
-    func performDrop(info: DropInfo) -> Bool {
-        let providers = info.itemProviders(for: [.text])
-        guard let provider = providers.first else { return false }
-
-        provider.loadItem(forTypeIdentifier: "public.text", options: nil) { (data, error) in
-            guard let data = data as? Data,
-                  let str = String(data: data, encoding: .utf8) else { return }
-            let parts = str.components(separatedBy: ":")
-            guard parts.count >= 2 else { return }
-            let draggedId = parts[0]
-            let type = parts[1]
-            // Only swap files with files
-            guard type == "file", draggedId != targetFileId else { return }
-
-            Task { @MainActor in
-                await viewModel.swapFile(id: draggedId, targetId: targetFileId)
-            }
-        }
-        return true
-    }
-}
-
-// MARK: - Preference Key for add-button Y positions
-struct AddButtonYKey: PreferenceKey {
-    static var defaultValue: [String: CGFloat] = [:]
-
-    static func reduce(value: inout [String: CGFloat], nextValue: () -> [String: CGFloat]) {
-        value.merge(nextValue()) { _, new in new }
     }
 }

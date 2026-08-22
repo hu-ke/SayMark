@@ -38,27 +38,6 @@ struct NoteFile: Codable, Identifiable, Hashable {
         return true
     }
 
-    /// 自定义重复间隔值（从 recurrence 字段解析，"custom:5:days" → 5）
-    var repeatIntervalValue: Int? {
-        guard let r = recurrence, r.hasPrefix("custom:") else { return nil }
-        let parts = r.components(separatedBy: ":")
-        guard parts.count == 3 else { return nil }
-        return Int(parts[1])
-    }
-
-    /// 自定义重复间隔单位（从 recurrence 字段解析，"custom:5:days" → "days"）
-    var repeatIntervalUnit: String? {
-        guard let r = recurrence, r.hasPrefix("custom:") else { return nil }
-        let parts = r.components(separatedBy: ":")
-        guard parts.count == 3 else { return nil }
-        return parts[2]
-    }
-
-    /// 构建自定义重复字符串
-    static func recurrenceString(value: Int, unit: String) -> String {
-        return "custom:\(value):\(unit)"
-    }
-
     /// 周期中文描述
     var recurrenceLabel: String {
         switch recurrence {

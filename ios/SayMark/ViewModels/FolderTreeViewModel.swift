@@ -50,14 +50,9 @@ final class FolderTreeViewModel: ObservableObject {
         }
     }
 
-    func createFile(name: String, content: String, parentId: String,
-                    type: String = "note", date: String = "", time: String = "",
-                    repeatIntervalValue: Int? = nil, repeatIntervalUnit: String? = nil) async {
+    func createFile(name: String, content: String, parentId: String) async {
         do {
-            _ = try await api.createFile(name: name, content: content, parentId: parentId,
-                                        type: type, date: date, time: time,
-                                        repeatIntervalValue: repeatIntervalValue,
-                                        repeatIntervalUnit: repeatIntervalUnit)
+            _ = try await api.createFile(name: name, content: content, parentId: parentId)
             await loadTree()
         } catch {
             self.error = error.localizedDescription
@@ -85,33 +80,6 @@ final class FolderTreeViewModel: ObservableObject {
     func moveFile(id: String, targetFolderId: String) async {
         do {
             try await api.moveFile(id: id, targetFolderId: targetFolderId)
-            await loadTree()
-        } catch {
-            self.error = error.localizedDescription
-        }
-    }
-
-    func moveFolder(id: String, targetFolderId: String) async {
-        do {
-            try await api.moveFolder(id: id, targetFolderId: targetFolderId)
-            await loadTree()
-        } catch {
-            self.error = error.localizedDescription
-        }
-    }
-
-    func swapFile(id: String, targetId: String) async {
-        do {
-            try await api.swapFile(id: id, targetId: targetId)
-            await loadTree()
-        } catch {
-            self.error = error.localizedDescription
-        }
-    }
-
-    func swapFolder(id: String, targetId: String) async {
-        do {
-            try await api.swapFolder(id: id, targetId: targetId)
             await loadTree()
         } catch {
             self.error = error.localizedDescription
