@@ -4,6 +4,7 @@ import asyncio
 import base64
 
 from fastapi import APIRouter, HTTPException
+from loguru import logger
 from pydantic import BaseModel
 
 from ..services import asr, oss
@@ -35,8 +36,11 @@ async def recognize(body: RecognizeRequest):
         text = await asr.transcribe(audio_url, body.format, body.sample_rate)
         return {"transcript": text}
     except oss.OSSNotConfigured as e:
+        logger.error(f"ASR 上传音频失败（OSS 未配置）: {e}")
         raise HTTPException(status_code=503, detail=str(e))
     except asr.ASRNotConfigured as e:
+        logger.error(f"ASR 鉴权未配置: {e}")
         raise HTTPException(status_code=503, detail=str(e))
     except asr.ASRError as e:
+        logger.error(f"ASR 识别失败: {e}")
         raise HTTPException(status_code=502, detail=str(e))
