@@ -158,7 +158,7 @@ class FileMetaResponse(BaseModel):
     type: str = "note"  # "note" | "appointment" | "alarm"
     date: str = ""      # 仅 appointment 有值 YYYY-MM-DD
     time: str = ""      # appointment=开始时间；alarm=周期触发时间 HH:MM
-    recurrence: Optional[str] = None  # 仅 alarm：""/daily/weekly/monthly
+    recurrence: Optional[str] = None  # 仅 alarm：daily/weekly/monthly
     created_at: str
     updated_at: str
 

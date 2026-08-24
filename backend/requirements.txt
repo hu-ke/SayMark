@@ -5,3 +5,5 @@ pydantic>=2.6
 pydantic-settings>=2.2
 openai>=1.12
 asyncpg>=0.29
+httpx>=0.26
+oss2>=2.18

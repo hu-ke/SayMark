@@ -5,6 +5,6 @@ enum AppConfig {
     #if targetEnvironment(simulator)
     static let baseURL = "http://localhost:8000/saymark-service"
     #else
-    static let baseURL = "https://scenelingo.today/saymark-service"
+    static let baseURL = "https://scenelingo.com/saymark-service"
     #endif
 }

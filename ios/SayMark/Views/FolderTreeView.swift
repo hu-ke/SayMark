@@ -29,6 +29,7 @@ struct FolderTreeView: View {
     @State private var deleteIsFolder = false
     @State private var addPopoverFolderId: String? = nil
     @State private var addPopoverFolderName: String = ""
+    @State private var showNewItem = false
     @State private var pushNewItemParentId: String? = nil
     @State private var pushNewItemType: String? = nil
 
@@ -39,6 +40,18 @@ struct FolderTreeView: View {
                 HStack(spacing: 0) {
                     Spacer()
                     HStack(spacing: 12) {
+                        Button {
+                            pushNewItemParentId = nil
+                            pushNewItemType = "folder"
+                            showNewItem = true
+                        } label: {
+                            Image(systemName: "folder.badge.plus")
+                                .font(.system(size: 18, weight: .medium))
+                                .foregroundColor(UIConstants.blue)
+                                .frame(width: 32, height: 32)
+                                .background(UIConstants.blue.opacity(0.1))
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                        }
                         Button(action: onChat) {
                             TabIcon(type: "chat", size: 18, color: UIConstants.blue, strokeWidth: 2)
                                 .frame(width: 32, height: 32)
@@ -78,8 +91,8 @@ struct FolderTreeView: View {
                 NavigationLink(
                     destination: NewItemSheet(viewModel: viewModel, parentId: pushNewItemParentId, preSelectedType: pushNewItemType),
                     isActive: Binding(
-                        get: { pushNewItemParentId != nil },
-                        set: { if !$0 { pushNewItemParentId = nil; pushNewItemType = nil } }
+                        get: { showNewItem },
+                        set: { if !$0 { showNewItem = false; pushNewItemParentId = nil; pushNewItemType = nil } }
                     )
                 ) { EmptyView() }
             )
@@ -96,11 +109,13 @@ struct FolderTreeView: View {
                             addPopoverFolderId = nil
                             pushNewItemParentId = folderId
                             pushNewItemType = "file"
+                            showNewItem = true
                         },
                         onNewDir: {
                             addPopoverFolderId = nil
                             pushNewItemParentId = folderId
                             pushNewItemType = "folder"
+                            showNewItem = true
                         }
                     )
                 }

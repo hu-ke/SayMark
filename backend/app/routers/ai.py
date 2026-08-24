@@ -176,9 +176,9 @@ _AGENT_SYSTEM_PROMPT = f"""\
 4. append_note — 补充内容到已有笔记、安排或闹钟
    参数：target_id?(文件id), name?(文件名兜底), content(要补充的内容)
 
-5. create_alarm — 创建闹钟（周期性提醒，如「每天1点喊我睡觉」）
+5. create_alarm — 创建闹钟（周期性提醒，如「每天1点喊我睡觉」「每周一9点提醒」）
    参数：name(名称), time(HH:MM 触发时间), recurrence(daily/weekly/monthly，缺省 daily), content(备注)
-   注意：只有「每天/每周/每月 + 时间」的周期性提醒才用 create_alarm；一次性倒计时用 create_appointment。
+   注意：只有周期性提醒才用 create_alarm。「每天/每周/每月 + 时间」→ daily/weekly/monthly；只说一次「X分钟后/X小时后」的一次性倒计时用 create_appointment。
 
 6. create_folder — 创建文件夹
    参数：name, parent_folder_id?(父目录id)
@@ -221,12 +221,13 @@ _AGENT_SYSTEM_PROMPT = f"""\
 ## 核心规则
 
 1. **优先用 run_query 查询信息**：需要查找已有笔记/安排/闹钟/文件夹时，先生成 SQL 查询。
-2. 区分笔记 / 安排 / 闹钟：有具体未来时间点（一次性）→ create_appointment；「X分钟后/X小时后」的倒计时也是一次性 → create_appointment(date=今天, time=当前+X)；周期性提醒（每天/每周/每月 + 时间）→ create_alarm；只是记东西 → create_note。
+2. 区分笔记 / 安排 / 闹钟：有具体未来时间点（一次性）→ create_appointment；只说一次「X分钟后/X小时后」的倒计时也是一次性 → create_appointment(date=今天, time=当前+X)；周期性提醒 → create_alarm（每天/每周/每月 + 时间 → daily/weekly/monthly）；只是记东西 → create_note。
 3. 操作已存在的项时，先 run_query 找到 id，再操作。
 4. 删除操作需用户确认：输出 done 并在 reply 中询问。
 5. **创建安排/闹钟一步到位**：安排和闹钟是独立实体，各用一条工具调用创建即可，不要分两步。例如「每天中午12点喊我午休」→ create_alarm(name=午休, time=12:00, recurrence=daily)。
 6. **创建笔记时禁止添油加醋**：用户说「记一下：今天买了苹果」→ content="今天买了苹果"（只修正错别字和格式），**不要**扩展成「今天买了苹果，苹果富含维生素…」之类的废话。你只是帮用户整理，不是代用户写作。
-7. 只输出 JSON，不要 markdown 代码块。"""
+7. **时间必须转成绝对时间**：把「今天/明天/后天/大后天/昨天/前天/下周X/下下周X」等相对时间，严格按上文「日期参考」换算成 YYYY-MM-DD（有具体钟点再填 HH:MM）。创建安排/闹钟时，title、content 中禁止出现「明天」「后天」「今天」等相对时间词，一律用绝对日期/时间表达（如「2026-08-25 08:00」或「8月25日早上8点」）。
+8. 只输出 JSON，不要 markdown 代码块。"""
 
 _MAX_AGENT_ITERATIONS = 5  # agent 循环最大迭代次数
 

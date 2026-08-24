@@ -204,6 +204,34 @@ final class APIClient {
                                  body: Body(confirmation_id: confirmationId, confirmed: confirmed))
     }
 
+    // MARK: - 语音识别（Doubao Seed-ASR 2.0）
+
+    /// 上传音频并转写为文字（POST /api/asr/recognize）
+    func recognizeSpeech(audioBase64: String, format: String = "wav", sampleRate: Int = 16000) async throws -> String {
+        struct Body: Encodable {
+            let audio_base64: String
+            let format: String
+            let sample_rate: Int
+        }
+        struct Response: Decodable { let transcript: String }
+        let resp: Response = try await request(
+            path: "/api/asr/recognize", method: "POST",
+            body: Body(audio_base64: audioBase64, format: format, sample_rate: sampleRate)
+        )
+        return resp.transcript
+    }
+
+    /// 上传图片到 OSS（POST /api/upload/image），返回可访问 URL
+    func uploadImage(imageData: Data) async throws -> String {
+        struct Body: Encodable { let image_base64: String }
+        struct Response: Decodable { let url: String }
+        let resp: Response = try await request(
+            path: "/api/upload/image", method: "POST",
+            body: Body(image_base64: imageData.base64EncodedString())
+        )
+        return resp.url
+    }
+
     // MARK: - 安排（Appointments，一次性）
 
     /// 获取所有安排

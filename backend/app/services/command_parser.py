@@ -28,7 +28,7 @@ _SYSTEM_PROMPT_TEMPLATE = (
     "支持的 action：\n"
     "- create_note: 新建笔记（无明确时间/日期的备忘）。参数 content(备忘原文), target_folder_id?(可选目录 id；缺省「未分类」), target_folder?(用户提到的目录名，兜底用)。重要：content 只做优化和结构化（修正错别字、整理格式），绝对不要添加用户没说的内容、不要润色扩展、不要添油加醋。\n"
     "- create_appointment: 新建安排（有明确时间/日期的**一次性**事项）。参数 title(安排标题), date(日期 YYYY-MM-DD), time(时间 HH:MM，缺省空), content(安排详情)。当用户说「明天下午3点开会」「下周一9点面试」「X月X号XX点」等一次性时间点时用此 action；**「X分钟后/X小时后」这种倒计时也是一次性安排，同样用此 action**（date=今天，time=当前时间+X）\n"
-    "- create_alarm: 新建闹钟（**周期性**提醒，如「每天1点喊我睡觉」「每周一9点提醒」）。参数 name(闹钟名称), time(触发时间 HH:MM), recurrence(周期 daily/weekly/monthly，缺省 daily), content(备注)。当用户说「每天/每周/每月 + 时间 + 提醒/喊我」时用此 action\n"
+    "- create_alarm: 新建闹钟（**周期性**提醒，如「每天1点喊我睡觉」「每周一9点提醒」）。参数 name(闹钟名称), time(触发时间 HH:MM), recurrence(周期 daily/weekly/monthly，缺省 daily), content(备注)。当用户说「每天/每周/每月 + 时间 + 提醒/喊我」时用 daily/weekly/monthly\n"
     "- append_note: 补充/追加内容到已有笔记、安排或闹钟。参数 target_id(要补充的文件 id), name(用户提到的文件名，兜底用), content(要补充的新内容)。当用户说「补充/加上/添加到XX」时用此 action\n"
     "- update_appointment: 修改已有安排的时间/日期/标题。参数 target_id(安排 id), name(安排名称兜底用), date?(YYYY-MM-DD), time?(HH:MM), content?(新正文)。当用户在编辑安排时说「改成XX点」「改到明天」时用此 action\n"
     "- update_alarm: 修改已有闹钟的时间/周期。参数 target_id(闹钟 id), name(闹钟名称兜底用), time?(HH:MM), recurrence?(daily/weekly/monthly), content?(新备注)。当用户说「把闹钟改成X点」「改成每周」时用此 action\n"
@@ -54,7 +54,7 @@ _SYSTEM_PROMPT_TEMPLATE = (
     "4. **区分笔记 / 安排 / 闹钟**：\n"
     "   - 用户提到具体的未来时间点（一次性，如下周一上午2点、明天3点、8月15号晚上）→ create_appointment。\n"
     "   - 用户提到「X分钟后/X小时后」的倒计时提醒（一次性）→ create_appointment（date=今天，time=当前时间+X），**不要**用 create_alarm。\n"
-    "   - 用户提到周期性提醒（每天/每周/每月 + 时间 + 提醒/喊我/通知）→ create_alarm。\n"
+    "   - 用户提到周期性提醒 → create_alarm：每天/每周/每月 + 时间 + 提醒/喊我/通知 → daily/weekly/monthly。\n"
     "   - 用户只是记东西、没有时间（如「记一件好玩的事」「今天买了菜」）→ create_note。\n"
     "\n"
     "相对时间换算规则（严格按此换算，不要多算！）：\n"
@@ -409,7 +409,7 @@ async def build_agent_context(text: str, target_file_id: str | None = None) -> s
 
 
 def _build_date_reference() -> str:
-    """构建未来日期对照表，供 LLM 直接查表换算「下周X」「下下周X」等表达。"""
+    """构建日期对照表，供 LLM 直接查表换算「今天/明天/下周X」等相对表达。"""
     today = datetime.now().date()
     weekday_names = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
     today_name = weekday_names[today.weekday()]
@@ -421,6 +421,15 @@ def _build_date_reference() -> str:
     next_next_monday = next_monday + timedelta(days=7)
 
     lines = [f"（今天是 {today.strftime('%Y-%m-%d')} {today_name}）", ""]
+    lines.append("常见相对日期（直接按此换算，不要自行推算）：")
+    relative_days = [
+        ("大前天", -3), ("前天", -2), ("昨天", -1), ("今天", 0),
+        ("明天", 1), ("后天", 2), ("大后天", 3),
+    ]
+    for name, offset in relative_days:
+        d = today + timedelta(days=offset)
+        lines.append(f"  {name}: {d.strftime('%Y-%m-%d')}")
+    lines.append("")
     lines.append("下周：")
     for i, name in enumerate(weekday_names):
         date = next_monday + timedelta(days=i)

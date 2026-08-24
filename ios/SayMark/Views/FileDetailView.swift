@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import PhotosUI
 
 struct FileDetailView: View {
     let fileId: String
@@ -14,8 +15,7 @@ struct FileDetailView: View {
     @State private var editedContent = ""
     @State private var previousContent = ""
     @State private var isVoiceEditing = false
-    @State private var isPressingMic = false
-    @StateObject private var speechRecognizer = SpeechRecognizer()
+    @StateObject private var voice = VoiceRecorder()
     @State private var showRenameAlert = false
     @State private var renameText = ""
     @State private var showMoveSheet = false
@@ -23,6 +23,11 @@ struct FileDetailView: View {
     @State private var showToast = false
     @State private var toastText = "已保存"
     @State private var activeDialog: Dialog?
+
+    // 编辑工具
+    @State private var photoItem: PhotosPickerItem?
+    @State private var uploadedImageURLs: [String] = []
+    @State private var isUploadingImage = false
 
     private enum Dialog: String, Identifiable {
         case delete, unsaved
@@ -151,6 +156,7 @@ struct FileDetailView: View {
         }
         .background(UIConstants.background)
         .navigationBarHidden(true)
+        .voiceRecorderOverlay(voice)
         .simultaneousGesture(
             DragGesture(minimumDistance: 30)
                 .onEnded { value in
@@ -168,6 +174,12 @@ struct FileDetailView: View {
         }
         .onAppear {
             folderTreeViewModel.hideFloatingButton = true
+            // 识别结果路由：松开发送/转文字确认 → 调整当前笔记
+            voice.onResult = { result in
+                if case .send(let text) = result {
+                    Task { await adjustNote(with: text) }
+                }
+            }
         }
         .onDisappear {
             folderTreeViewModel.hideFloatingButton = false
@@ -219,6 +231,10 @@ struct FileDetailView: View {
         }
         .sheet(item: $exportItem) { item in
             ActivityView(activityItems: [item.url])
+        }
+        .onChange(of: photoItem) { _, newItem in
+            guard let newItem else { return }
+            Task { await handlePhoto(newItem) }
         }
     }
 
@@ -298,6 +314,28 @@ struct FileDetailView: View {
                     RoundedRectangle(cornerRadius: 10)
                         .stroke(UIConstants.separator, lineWidth: 1)
                 )
+
+            // 已上传图片缩略图
+            if !uploadedImageURLs.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(uploadedImageURLs, id: \.self) { url in
+                            AsyncImage(url: URL(string: url)) { phase in
+                                if let image = phase.image {
+                                    image.resizable().scaledToFill()
+                                } else if phase.error != nil {
+                                    Color(UIConstants.fill)
+                                } else {
+                                    Color(UIConstants.fill).overlay(ProgressView().scaleEffect(0.7))
+                                }
+                            }
+                            .frame(width: 64, height: 64)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                        }
+                    }
+                    .padding(.vertical, 2)
+                }
+            }
         }
         .padding(.horizontal, 16)
         .padding(.top, 12)
@@ -306,57 +344,144 @@ struct FileDetailView: View {
 
     // MARK: - Bottom Toolbar
     private var bottomToolbar: some View {
-        HStack(spacing: 0) {
-            // 撤销
-            Button {
-                if isEditing {
-                    editedContent = previousContent
-                }
-            } label: {
-                Image(systemName: "arrow.uturn.backward")
-                    .font(.system(size: 22))
-                    .foregroundColor(UIConstants.label3.opacity(0.45))
-            }
-            .frame(maxWidth: .infinity)
-
-            // 语音麦克风（按住说话，松开后由 AI 调整当前笔记）
-            Image(systemName: "mic.fill")
-                .font(.system(size: 22))
-                .foregroundColor(.white)
-                .frame(width: 46, height: 46)
-                .background(Circle().fill(isPressingMic ? UIConstants.red : UIConstants.blue))
-                .shadow(color: (isPressingMic ? UIConstants.red : UIConstants.blue).opacity(0.38), radius: 10, y: 2)
-                .contentShape(Circle())
-                .onLongPressGesture(minimumDuration: 0.2, maximumDistance: 60, perform: {}, onPressingChanged: { pressing in
-                    if pressing {
-                        startVoiceRecording()
-                    } else {
-                        stopVoiceRecording()
-                    }
-                })
-                .frame(maxWidth: .infinity)
-
-            // 右下角：编辑时显示保存，非编辑时留空
+        VStack(spacing: 0) {
+            // 编辑工具条（图片 / 列表 / 加粗 / 斜体 / 标题 / 引用）
             if isEditing {
+                editToolStrip
+                HDSeparator()
+            }
+
+            HStack(spacing: 0) {
+                // 撤销
                 Button {
-                    saveEdit()
+                    if isEditing {
+                        editedContent = previousContent
+                    }
                 } label: {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 24))
-                        .foregroundColor(UIConstants.blue)
+                    Image(systemName: "arrow.uturn.backward")
+                        .font(.system(size: 22))
+                        .foregroundColor(canUndo ? UIConstants.blue : UIConstants.label3.opacity(0.45))
                 }
                 .frame(maxWidth: .infinity)
-            } else {
-                Color.clear.frame(maxWidth: .infinity)
+
+                // 语音麦克风（按住说话，松开后由 AI 调整当前笔记）
+                Image(systemName: "mic.fill")
+                    .font(.system(size: 22))
+                    .foregroundColor(.white)
+                    .frame(width: 46, height: 46)
+                    .background(Circle().fill(voice.isRecording ? UIConstants.red : UIConstants.blue))
+                    .shadow(color: (voice.isRecording ? UIConstants.red : UIConstants.blue).opacity(0.38), radius: 10, y: 2)
+                    .contentShape(Circle())
+                    .voiceRecordGesture(recorder: voice)
+                    .frame(maxWidth: .infinity)
+
+                // 右下角：编辑时显示保存，非编辑时留空
+                if isEditing {
+                    Button {
+                        saveEdit()
+                    } label: {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 24))
+                            .foregroundColor(UIConstants.blue)
+                    }
+                    .frame(maxWidth: .infinity)
+                } else {
+                    Color.clear.frame(maxWidth: .infinity)
+                }
             }
+            .frame(height: 54)
         }
-        .frame(height: 54)
         .background(
             Color(red: 0.949, green: 0.949, blue: 0.969, opacity: 0.95)
                 .background(Material.ultraThin)
         )
         .overlay(alignment: .top) {
             HDSeparator()
+        }
+    }
+
+    // MARK: - Edit Tool Strip
+    private var editToolStrip: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 22) {
+                PhotosPicker(selection: $photoItem, matching: .images) {
+                    toolIcon("photo")
+                }
+                .disabled(isUploadingImage)
+
+                Menu {
+                    Button("1. 2. 3. 数字") { insertListMarker("1. ") }
+                    Button("• 原点") { insertListMarker("- ") }
+                    Button("♥ 爱心") { insertListMarker("♥ ") }
+                    Button("★ 五角星") { insertListMarker("★ ") }
+                } label: {
+                    toolIcon("list.bullet")
+                }
+
+                Button { insertInline("**粗体**") } label: { toolIcon("bold") }
+                Button { insertInline("*斜体*") } label: { toolIcon("italic") }
+                Button { insertLinePrefix("## ") } label: { toolIcon("textformat") }
+                Button { insertLinePrefix("> ") } label: { toolIcon("text.quote") }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+        }
+    }
+
+    private func toolIcon(_ systemName: String) -> some View {
+        Image(systemName: systemName)
+            .font(.system(size: 20))
+            .foregroundColor(UIConstants.label2)
+            .frame(width: 36, height: 36)
+            .contentShape(Rectangle())
+    }
+
+    /// 在文末直接追加一段文本（加粗/斜体等）
+    private func insertInline(_ text: String) {
+        editedContent += text
+        focusedField = .content
+    }
+
+    /// 以新行前缀形式插入（标题 / 引用）
+    private func insertLinePrefix(_ prefix: String) {
+        ensureTrailingNewline()
+        editedContent += prefix
+        focusedField = .content
+    }
+
+    /// 插入列表标记
+    private func insertListMarker(_ marker: String) {
+        ensureTrailingNewline()
+        editedContent += marker + " "
+        focusedField = .content
+    }
+
+    private func ensureTrailingNewline() {
+        if !editedContent.isEmpty && !editedContent.hasSuffix("\n") {
+            editedContent += "\n"
+        }
+    }
+
+    // MARK: - Image Upload
+    @MainActor
+    private func handlePhoto(_ item: PhotosPickerItem) async {
+        isUploadingImage = true
+        defer { isUploadingImage = false; photoItem = nil }
+        do {
+            guard let data = try await item.loadTransferable(type: Data.self),
+                  let uiImage = UIImage(data: data),
+                  let jpeg = uiImage.jpegData(compressionQuality: 0.85) else {
+                showToastMessage("无法读取图片")
+                return
+            }
+            let url = try await APIClient.shared.uploadImage(imageData: jpeg)
+            uploadedImageURLs.append(url)
+            ensureTrailingNewline()
+            editedContent += "![图片](\(url))"
+            focusedField = .content
+            showToastMessage("图片已上传")
+        } catch {
+            showToastMessage(error.localizedDescription)
         }
     }
 
@@ -384,6 +509,11 @@ struct FileDetailView: View {
         let savedContent = viewModel.note?.content ?? ""
         return editedTitle.trimmingCharacters(in: .whitespaces) != savedTitle
             || editedContent != savedContent
+    }
+
+    /// 编辑中且正文已被改动时可撤销
+    private var canUndo: Bool {
+        isEditing && editedContent != previousContent
     }
 
     private func enterEditMode(focus: Field? = .content) {
@@ -428,19 +558,6 @@ struct FileDetailView: View {
     private func trimmedTitle() -> String {
         let t = editedTitle.trimmingCharacters(in: .whitespaces)
         return t.isEmpty ? (viewModel.note?.name ?? fileName) : t
-    }
-
-    private func startVoiceRecording() {
-        isPressingMic = true
-        Task { await speechRecognizer.startRecording() }
-    }
-
-    private func stopVoiceRecording() {
-        isPressingMic = false
-        speechRecognizer.stopRecording()
-        let text = speechRecognizer.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
-        Task { await adjustNote(with: text) }
     }
 
     @MainActor
@@ -660,9 +777,24 @@ struct MarkdownPreview: View {
                     }
                     .padding(.vertical, 6)
 
-                case .bulletItem(let content):
+                case .image(let url):
+                    AsyncImage(url: URL(string: url)) { phase in
+                        if let image = phase.image {
+                            image.resizable().scaledToFit()
+                        } else if phase.error != nil {
+                            Color(UIConstants.fill)
+                        } else {
+                            Color(UIConstants.fill).overlay(ProgressView())
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(maxHeight: 240)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .padding(.vertical, 6)
+
+                case .bulletItem(let marker, let content):
                     HStack(alignment: .top, spacing: 6) {
-                        Text("•")
+                        Text(marker)
                             .foregroundColor(UIConstants.label)
                         Text(inlineMarkdown(content))
                             .font(.system(size: 15))
@@ -705,7 +837,8 @@ struct MarkdownPreview: View {
         case heading(String, Int)
         case body(String)
         case blockquote(String)
-        case bulletItem(String)
+        case image(String)
+        case bulletItem(marker: String, content: String)
         case orderedItem(Int, String)
     }
 
@@ -734,13 +867,39 @@ struct MarkdownPreview: View {
                 orderedCounter = 0
                 blocks.append(.blockquote(String(trimmed.dropFirst(2))))
             }
-            // Unordered list
+            // Image（![alt](url)）
+            else if trimmed.hasPrefix("![") {
+                if let open = trimmed.range(of: "]("),
+                   let close = trimmed[open.upperBound...].firstIndex(of: ")") {
+                    let url = String(trimmed[open.upperBound..<close])
+                    if url.hasPrefix("http") {
+                        orderedCounter = 0
+                        blocks.append(.image(url))
+                    } else {
+                        orderedCounter = 0
+                        blocks.append(.body(trimmed))
+                    }
+                } else {
+                    orderedCounter = 0
+                    blocks.append(.body(trimmed))
+                }
+            }
+            // Unordered list（支持原点 / 爱心 / 五角星等自定义标记）
             else if trimmed.hasPrefix("- ") {
                 orderedCounter = 0
-                blocks.append(.bulletItem(String(trimmed.dropFirst(2))))
+                blocks.append(.bulletItem(marker: "•", content: String(trimmed.dropFirst(2))))
             } else if trimmed.hasPrefix("* ") {
                 orderedCounter = 0
-                blocks.append(.bulletItem(String(trimmed.dropFirst(2))))
+                blocks.append(.bulletItem(marker: "•", content: String(trimmed.dropFirst(2))))
+            } else if trimmed.hasPrefix("♥ ") {
+                orderedCounter = 0
+                blocks.append(.bulletItem(marker: "♥", content: String(trimmed.dropFirst(2))))
+            } else if trimmed.hasPrefix("★ ") {
+                orderedCounter = 0
+                blocks.append(.bulletItem(marker: "★", content: String(trimmed.dropFirst(2))))
+            } else if trimmed.hasPrefix("• ") {
+                orderedCounter = 0
+                blocks.append(.bulletItem(marker: "•", content: String(trimmed.dropFirst(2))))
             }
             // Ordered list
             else if let match = trimmed.range(of: #"^\d+\."#, options: .regularExpression) {

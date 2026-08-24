@@ -8,6 +8,7 @@ struct NewItemSheet: View {
 
     @State private var selectedType: String
     @State private var name: String
+    @FocusState private var nameFocused: Bool
 
     init(viewModel: FolderTreeViewModel, parentId: String? = nil, preSelectedType: String? = nil) {
         self.viewModel = viewModel
@@ -15,7 +16,7 @@ struct NewItemSheet: View {
         self.preSelectedType = preSelectedType
         let initialType = preSelectedType ?? "folder"
         self._selectedType = State(initialValue: initialType)
-        self._name = State(initialValue: initialType == "file" ? "新建文件" : "新建文件夹")
+        self._name = State(initialValue: "")
     }
 
     var body: some View {
@@ -82,6 +83,7 @@ struct NewItemSheet: View {
                             TextField("输入名称", text: $name)
                                 .font(.system(size: 17))
                                 .kerning(-0.41)
+                                .focused($nameFocused)
                             if !name.isEmpty {
                                 Button {
                                     name = ""
@@ -105,6 +107,10 @@ struct NewItemSheet: View {
         }
         .background(UIConstants.background)
         .navigationBarHidden(true)
+        .onAppear {
+            // 新建页名称不预填，光标自动聚焦到名称输入框
+            nameFocused = true
+        }
     }
 
     private func sectionHeader(_ title: String, top: CGFloat = 20) -> some View {
@@ -123,7 +129,6 @@ struct NewItemSheet: View {
             withAnimation(.easeInOut(duration: 0.15)) {
                 selectedType = type
             }
-            name = type == "folder" ? "新建文件夹" : "新建文件"
         } label: {
             HStack(spacing: 12) {
                 RowIcon(systemName: icon, color: color)

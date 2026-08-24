@@ -467,11 +467,14 @@ async def get_or_create_user(device_id: str) -> dict:
     return user
 
 
-async def update_user_location(device_id: str, lat: float, lon: float) -> dict | None:
+async def update_user_location(device_id: str, lat: float, lon: float) -> dict:
+    # 用户不存在时自动创建，避免首次上报位置时 404
+    await get_or_create_user(device_id)
     now = _now()
-    r = await pg_db.execute("UPDATE users SET latitude=$1, longitude=$2, updated_at=$3 WHERE device_id=$4", lat, lon, now, device_id)
-    if r.endswith("0"):
-        return None
+    await pg_db.execute(
+        "UPDATE users SET latitude=$1, longitude=$2, updated_at=$3 WHERE device_id=$4",
+        lat, lon, now, device_id,
+    )
     return await pg_db.fetchrow("SELECT id, device_id, latitude, longitude, home_address, created_at, updated_at FROM users WHERE device_id=$1", device_id)
 
 
@@ -482,10 +485,8 @@ async def get_user_places(device_id: str) -> list[dict]:
     """, device_id)
 
 
-async def add_user_place(device_id: str, name: str, lat: float, lon: float) -> dict | None:
-    user = await pg_db.fetchrow_raw("SELECT id FROM users WHERE device_id=$1", device_id)
-    if user is None:
-        return None
+async def add_user_place(device_id: str, name: str, lat: float, lon: float) -> dict:
+    user = await get_or_create_user(device_id)
     user_id = user["id"]
     await pg_db.execute(
         """INSERT INTO user_places (user_id, name, lat, lon)

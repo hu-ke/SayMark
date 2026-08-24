@@ -46,7 +46,8 @@ async def update_alarm(alarm_id: str, body: AlarmUpdate):
         raise HTTPException(status_code=422, detail=f"recurrence 无效：{body.recurrence}")
     updated = await crud.update_alarm(
         alarm_id,
-        name=body.name, time=body.time, recurrence=body.recurrence, content=body.content,
+        name=body.name, time=body.time, recurrence=body.recurrence,
+        content=body.content,
     )
     if updated is None:
         raise HTTPException(404, "闹钟不存在")

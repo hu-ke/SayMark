@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from . import pg_ops
 from .pg_db import close_pool
-from .routers import ai, alarms, appointments, files, folders, geo, notes, reorder, user
+from .routers import ai, alarms, appointments, asr, files, folders, geo, notes, reorder, upload, user
 
 
 @asynccontextmanager
@@ -44,6 +44,8 @@ service.include_router(alarms.router)
 service.include_router(reorder.router)
 service.include_router(geo.router)
 service.include_router(user.router)
+service.include_router(asr.router)
+service.include_router(upload.router)
 app.include_router(service)
 
 

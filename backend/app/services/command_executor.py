@@ -34,6 +34,15 @@ def _int_id(value: Any) -> int | None:
         return None
 
 
+_VALID_RECURRENCE = ("daily", "weekly", "monthly")
+
+
+def _recurrence_label(recurrence: str) -> str:
+    """把 recurrence 转成中文标签。"""
+    labels = {"daily": "每天", "weekly": "每周", "monthly": "每月"}
+    return labels.get(recurrence, recurrence)
+
+
 async def _resolve_files_by_name(name: str) -> tuple[list[dict], str]:
     """按名称查找文件：SQL ILIKE 匹配 → 语义搜索兜底。"""
     if not name:
@@ -244,15 +253,18 @@ async def _handle_create_alarm(parsed: dict) -> dict:
     content = parsed.get("content", "")
     if not name:
         return _result("create_alarm", False, "缺少闹钟名称")
+    if recurrence not in _VALID_RECURRENCE:
+        return _result("create_alarm", False, f"recurrence 无效：{recurrence}")
     if not time_:
         return _result("create_alarm", False, "缺少触发时间 time (HH:MM)")
-    if recurrence not in ("daily", "weekly", "monthly"):
-        return _result("create_alarm", False, f"recurrence 无效：{recurrence}")
     # 闹钟为周期性提醒，不归属文件夹
-    doc = await db.create_file(name, content, None, file_type="alarm", time=time_, recurrence=recurrence)
+    doc = await db.create_file(
+        name, content, None, file_type="alarm", time=time_, recurrence=recurrence,
+    )
     await _store_embedding(doc["id"], name, content)
-    rc_label = {"daily": "每天", "weekly": "每周", "monthly": "每月"}.get(recurrence, recurrence)
-    return _result("create_alarm", True, f"闹钟已创建（{rc_label} {time_}）", doc)
+    rc_label = _recurrence_label(recurrence)
+    msg = f"闹钟已创建（{rc_label} {time_}）"
+    return _result("create_alarm", True, msg, doc)
 
 
 async def _handle_delete_alarm(parsed: dict) -> dict:
@@ -301,11 +313,14 @@ async def _handle_update_alarm(parsed: dict) -> dict:
     name = str(parsed.get("name") or "").strip() or None
     time = str(parsed.get("time") or "").strip() or None
     recurrence = str(parsed.get("recurrence") or "").strip() or None
-    if recurrence and recurrence not in ("daily", "weekly", "monthly"):
+    if recurrence and recurrence not in _VALID_RECURRENCE:
         return _result("update_alarm", False, f"recurrence 无效：{recurrence}")
     content = parsed.get("content")
 
-    updated = await db.update_alarm(file_id, name=name, time=time, recurrence=recurrence, content=content)
+    updated = await db.update_alarm(
+        file_id, name=name, time=time, recurrence=recurrence,
+        content=content,
+    )
     if updated is None:
         return _result("update_alarm", False, "闹钟不存在或更新失败")
 
@@ -315,8 +330,7 @@ async def _handle_update_alarm(parsed: dict) -> dict:
     if time:
         parts.append(f"时间 {time}")
     if recurrence:
-        rc_label = {"daily": "每天", "weekly": "每周", "monthly": "每月"}.get(recurrence, recurrence)
-        parts.append(f"周期 {rc_label}")
+        parts.append(f"周期 {_recurrence_label(recurrence)}")
     label = "已更新闹钟：" + "，".join(parts) if parts else "闹钟已更新"
     return _result("update_alarm", True, label, updated)
 

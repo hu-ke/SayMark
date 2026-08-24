@@ -11,8 +11,7 @@ struct ChatView: View {
     @State private var textEditContent = ""
     @State private var hasSentInitial = false
     @State private var isVoiceMode = true
-    @State private var isPressingMic = false
-    @StateObject private var speechRecognizer = SpeechRecognizer()
+    @StateObject private var voice = VoiceRecorder()
 
     @FocusState private var isFocused: Bool
 
@@ -76,6 +75,15 @@ struct ChatView: View {
             if sidebarOpen { sidebarOverlay }
             // 文字编辑底部弹窗
             if textEditOpen { textEditPanel }
+        }
+        .voiceRecorderOverlay(voice)
+        .onAppear {
+            // 识别结果路由：松开发送/转文字确认 → 发送到聊天
+            voice.onResult = { result in
+                if case .send(let text) = result {
+                    Task { await viewModel.send(text) }
+                }
+            }
         }
         .task {
             guard let msg = initialMessage, !hasSentInitial else { return }
@@ -163,23 +171,17 @@ struct ChatView: View {
 
                 // Center: voice button or text field
                 if isVoiceMode {
-                    Text(isPressingMic ? "松开发送" : "按住 说话")
+                    Text(voice.isRecording ? "松开发送" : "按住 说话")
                         .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(isPressingMic ? .white : UIConstants.label2)
+                        .foregroundColor(voice.isRecording ? .white : UIConstants.label2)
                         .kerning(-0.24)
                         .frame(maxWidth: .infinity, minHeight: 36)
-                        .background(isPressingMic ? UIConstants.blue : Color.white)
+                        .background(voice.isRecording ? UIConstants.blue : Color.white)
                         .clipShape(RoundedRectangle(cornerRadius: 8))
                         .overlay(RoundedRectangle(cornerRadius: 8)
-                            .stroke(isPressingMic ? UIConstants.blue : Color(red: 0.235, green: 0.235, blue: 0.263).opacity(0.2), lineWidth: 1))
+                            .stroke(voice.isRecording ? UIConstants.blue : Color(red: 0.235, green: 0.235, blue: 0.263).opacity(0.2), lineWidth: 1))
                         .contentShape(Rectangle())
-                        .onLongPressGesture(minimumDuration: 0.2, maximumDistance: 60, perform: {}, onPressingChanged: { pressing in
-                            if pressing {
-                                startVoice()
-                            } else {
-                                stopVoice()
-                            }
-                        })
+                        .voiceRecordGesture(recorder: voice)
                 } else {
                     HStack {
                         TextField("输入消息...", text: $inputText)
@@ -416,20 +418,6 @@ struct ChatView: View {
             }
             .ignoresSafeArea(edges: .bottom)
         }
-    }
-
-    // MARK: - Voice
-    private func startVoice() {
-        isPressingMic = true
-        Task { await speechRecognizer.startRecording() }
-    }
-
-    private func stopVoice() {
-        isPressingMic = false
-        speechRecognizer.stopRecording()
-        let text = speechRecognizer.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
-        Task { await viewModel.send(text) }
     }
 
     // MARK: - Send

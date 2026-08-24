@@ -26,7 +26,7 @@
 | `type` | VARCHAR(20) | 'note'（笔记）/ 'appointment'（安排，一次性）/ 'alarm'（闹钟，周期性） |
 | `date` | DATE | 仅 appointment：具体日期 YYYY-MM-DD |
 | `time` | TIME | appointment=开始时间；alarm=周期触发时间 |
-| `recurrence` | VARCHAR(20) | 仅 alarm：''=一次性 / 'daily' / 'weekly' / 'monthly' |
+| `recurrence` | VARCHAR(20) | 仅 alarm：'daily' / 'weekly' / 'monthly' |
 | `position` | INTEGER | 同级排序 |
 | `embedding` | FLOAT8[] | 语义搜索向量 |
 | `created_at` | TIMESTAMPTZ | 创建时间 |

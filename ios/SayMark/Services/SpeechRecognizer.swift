@@ -1,116 +1,41 @@
 import Foundation
-import Speech
 import AVFoundation
+import Speech
 import Combine
 
-/// 语音识别器（zh-CN，SFSpeechRecognizer + AVAudioEngine）
-/// 注意：iOS 模拟器对语音识别支持有限，可能无法识别；真机可用。
+/// 语音录制 + 实时识别（豆包 Seed-ASR 2.0 优先，本地 SFSpeechRecognizer 兜底）。
+///
+/// - 录音过程中，SFSpeechRecognizer 实时产出部分识别文本（实时体验）。
+/// - 松手后，把音频上传后端走豆包识别；豆包失败/为空时，兜底用本地识别结果。
+/// 同时承载「按住说话」交互状态（分区：正常 / 取消 / 转文字）。
 @MainActor
-final class SpeechRecognizer: ObservableObject {
-    @Published var transcript: String = ""
-    @Published var isRecording: Bool = false
+final class VoiceRecorder: ObservableObject {
+    @Published var isRecording = false
+    @Published var isProcessing = false       // 松手后等待豆包识别
+    @Published var transcript = ""            // 本地实时识别文本（也用于兜底）
     @Published var errorMessage: String?
-    /// 语音识别是否可用（模拟器或未授权时为 false）
-    @Published var isAvailable: Bool = false
+    @Published var zone: RecZone? = nil        // 录音分区（nil=未录音）
+    @Published var showTextConfirm = false
+    @Published var confirmText = ""
 
-    private let speechRecognizer: SFSpeechRecognizer?
+    /// 识别结果路由回调（.send 直接发送 / .cancelled 取消）
+    var onResult: ((RecordingResult) -> Void)?
+
     private let audioEngine = AVAudioEngine()
+    private var speechRecognizer: SFSpeechRecognizer?
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
-    private var wasInterrupted: Bool = false
+    private let pcmAccumulator = PCMAccumulator()
+    private var nativeSampleRate: Double = 44100
 
-    init(locale: Locale = Locale(identifier: "zh-CN")) {
-        // 模拟器上 zh-CN 可能返回 nil，不要强解包
-        self.speechRecognizer = SFSpeechRecognizer(locale: locale) ?? SFSpeechRecognizer()
-        self.isAvailable = self.speechRecognizer?.isAvailable ?? false
-        setupInterruptionObserver()
-    }
-
-    deinit {
-        audioEngine.stop()
-        audioEngine.inputNode.removeTap(onBus: 0)
-    }
-
-    /// 监听音频中断（来电、闹钟等），优雅恢复
-    private func setupInterruptionObserver() {
-        NotificationCenter.default.addObserver(
-            forName: AVAudioSession.interruptionNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] notification in
-            guard let self = self, self.isRecording else { return }
-            guard let typeValue = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
-                  let type = AVAudioSession.InterruptionType(rawValue: typeValue) else { return }
-
-            if type == .began {
-                // 中断开始：标记并停止录音
-                self.wasInterrupted = true
-                Task { @MainActor in
-                    self.stopRecording()
-                }
-            } else if type == .ended {
-                // 中断结束：尝试恢复录音
-                if self.wasInterrupted {
-                    self.wasInterrupted = false
-                    self.errorMessage = "录音被中断，请重试"
-                }
-            }
-        }
-
-        NotificationCenter.default.addObserver(
-            forName: AVAudioSession.routeChangeNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] notification in
-            guard let self = self, self.isRecording else { return }
-            guard let reasonValue = notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt,
-                  let reason = AVAudioSession.RouteChangeReason(rawValue: reasonValue) else { return }
-
-            // 拔出耳机等导致录音中断
-            if reason == .oldDeviceUnavailable {
-                self.wasInterrupted = true
-                Task { @MainActor in
-                    self.stopRecording()
-                    self.errorMessage = "音频设备已断开，请重试"
-                }
-            }
-        }
-    }
-
-    /// 将底层识别错误转化为用户友好提示
-    private func userFriendlyError(from error: Error) -> String {
-        let nsError = error as NSError
-        // kAFAssistantErrorDomain: error 216 = 无语音 / 超时 / 中断
-        // error 203 = 识别服务不可用 / 重试过多
-        // error 209 = 无匹配语言 / 空音频
-        if nsError.domain == "kAFAssistantErrorDomain" {
-            switch nsError.code {
-            case 216:
-                return "未检测到语音，请重新说话或靠近麦克风"
-            case 203:
-                return "语音识别服务繁忙，请稍后重试"
-            case 209:
-                return "未识别到有效语音，请再试一次"
-            default:
-                return "语音识别失败（\(nsError.code)），请重试"
-            }
-        }
-        // 其他常见错误
-        if nsError.domain == "kLSRErrorDomain" || nsError.domain == "LSRError" {
-            return "语音识别服务暂时不可用，请稍后重试"
-        }
-        return "识别失败，请重试"
-    }
-
-    /// 请求语音识别与麦克风权限，返回是否全部授权
     func requestAuthorization() async -> Bool {
-        let speechAuth = await withCheckedContinuation { (cont: CheckedContinuation<SFSpeechRecognizerAuthorizationStatus, Never>) in
+        let speechAuth = await withCheckedContinuation { (cont: CheckedContinuation<Bool, Never>) in
             SFSpeechRecognizer.requestAuthorization { status in
-                cont.resume(returning: status)
+                cont.resume(returning: status == .authorized)
             }
         }
-        guard speechAuth == .authorized else {
-            self.errorMessage = "未授权语音识别，请在设置中开启"
+        guard speechAuth else {
+            errorMessage = "未授权语音识别，请在设置中开启"
             return false
         }
         let micGranted = await withCheckedContinuation { (cont: CheckedContinuation<Bool, Never>) in
@@ -119,63 +44,76 @@ final class SpeechRecognizer: ObservableObject {
             }
         }
         guard micGranted else {
-            self.errorMessage = "未授权麦克风，请在设置中开启"
+            errorMessage = "未授权麦克风，请在设置中开启"
             return false
         }
         return true
     }
 
-    /// 开始录音
+    // MARK: - 录音（本地实时识别 + 采集 PCM）
+
     func startRecording() async {
         guard !isRecording else { return }
-        guard let speechRecognizer = speechRecognizer else {
-            self.errorMessage = "语音识别不可用（模拟器可能不支持，请用真机或在下方手动输入）"
-            return
-        }
-        guard speechRecognizer.isAvailable else {
-            self.errorMessage = "语音识别不可用，请用真机或在下方手动输入"
-            return
-        }
         let authorized = await requestAuthorization()
         guard authorized else { return }
 
-        // 重置状态
         transcript = ""
         errorMessage = nil
+        isProcessing = false
+
+        guard let speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "zh-CN")),
+              speechRecognizer.isAvailable else {
+            errorMessage = "语音识别不可用（模拟器可能不支持，请用真机）"
+            return
+        }
+        self.speechRecognizer = speechRecognizer
 
         do {
-            let audioSession = AVAudioSession.sharedInstance()
-            try audioSession.setCategory(.record, mode: .measurement, options: .duckOthers)
-            try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
+            let session = AVAudioSession.sharedInstance()
+            try session.setCategory(.record, mode: .measurement, options: .duckOthers)
+            try session.setActive(true, options: .notifyOthersOnDeactivation)
         } catch {
-            self.errorMessage = "音频会话配置失败: \(error.localizedDescription)"
+            errorMessage = "音频会话配置失败：\(error.localizedDescription)"
             return
         }
 
+        let inputNode = audioEngine.inputNode
+        let inputFormat = inputNode.outputFormat(forBus: 0)
+        guard inputFormat.sampleRate > 0 else {
+            errorMessage = "音频格式无效（模拟器可能不支持录音），请用真机"
+            return
+        }
+        // 使用输入节点的原始格式建 tap，避免自定义格式导致的 format mismatch 崩溃；
+        // 豆包需要的 16kHz 音频在停止录音后再统一重采样。
+        nativeSampleRate = inputFormat.sampleRate
+
         recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
         guard let recognitionRequest = recognitionRequest else {
-            self.errorMessage = "无法创建识别请求"
+            errorMessage = "无法创建识别请求"
             return
         }
         recognitionRequest.shouldReportPartialResults = true
 
-        let inputNode = audioEngine.inputNode
-        let recordingFormat = inputNode.outputFormat(forBus: 0)
-        // 防御：模拟器上 sampleRate 可能为 0，installTap 会 abort
-        guard recordingFormat.sampleRate > 0 else {
-            self.errorMessage = "音频格式无效（模拟器可能不支持录音），请用真机或在下方手动输入"
-            return
-        }
-        inputNode.removeTap(onBus: 0) // 防止重复安装 tap 导致崩溃
-        inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { buffer, _ in
+        pcmAccumulator.reset()
+        inputNode.removeTap(onBus: 0)
+        inputNode.installTap(onBus: 0, bufferSize: 1024, format: inputFormat) { [weak self] buffer, _ in
+            guard let self = self else { return }
             recognitionRequest.append(buffer)
+            // 采集原始 Float32（单声道），结束后重采样到 16kHz
+            if let floatData = buffer.floatChannelData?[0], buffer.frameLength > 0 {
+                let frames = Int(buffer.frameLength)
+                let byteCount = frames * MemoryLayout<Float>.size
+                floatData.withMemoryRebound(to: UInt8.self, capacity: byteCount) { ptr in
+                    self.pcmAccumulator.append(ptr, count: byteCount)
+                }
+            }
         }
 
         audioEngine.prepare()
         do {
             try audioEngine.start()
         } catch {
-            self.errorMessage = "音频引擎启动失败: \(error.localizedDescription)"
+            errorMessage = "音频引擎启动失败：\(error.localizedDescription)"
             return
         }
 
@@ -184,40 +122,219 @@ final class SpeechRecognizer: ObservableObject {
         recognitionTask = speechRecognizer.recognitionTask(with: recognitionRequest) { [weak self] result, error in
             guard let self = self else { return }
             if let result = result {
+                let text = result.bestTranscription.formattedString
                 Task { @MainActor in
-                    self.transcript = result.bestTranscription.formattedString
+                    self.transcript = text
                 }
             }
             if let error = error {
                 Task { @MainActor in
-                    // 如果是因为中断触发的停止，不覆盖已有错误信息
                     if self.errorMessage == nil {
-                        self.errorMessage = self.userFriendlyError(from: error)
+                        self.errorMessage = "识别失败：\(error.localizedDescription)"
                     }
-                    self.stopRecording()
                 }
             }
         }
     }
 
-    /// 停止录音
-    func stopRecording() {
-        guard isRecording else { return }
-        let wasRunning = audioEngine.isRunning
-        if wasRunning {
-            audioEngine.stop()
-        }
+    /// 结束录音：豆包优先，失败兜底本地识别。返回最终文本。
+    @discardableResult
+    func stopRecording() async -> String {
+        guard isRecording else { return "" }
+        isRecording = false
+
+        audioEngine.stop()
         audioEngine.inputNode.removeTap(onBus: 0)
         recognitionRequest?.endAudio()
-        // 正常手动停止用 finish()（触发最终结果），而非 cancel()
-        // 避免触发 kAFAssistantErrorDomain 216 之类的错误
         recognitionTask?.finish()
         recognitionRequest = nil
         recognitionTask = nil
-        isRecording = false
-        if wasRunning {
-            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+
+        // 上传豆包识别（等待期间本地识别也会产出最终结果）
+        let wav = buildWAV(from: floatTo16kPCM(pcmAccumulator.snapshot()))
+        var doubaoText = ""
+        if !wav.isEmpty {
+            do {
+                doubaoText = try await APIClient.shared.recognizeSpeech(
+                    audioBase64: wav.base64EncodedString(),
+                    format: "wav",
+                    sampleRate: 16000
+                )
+            } catch {
+                errorMessage = error.localizedDescription
+            }
         }
-        wasInterrupted = false
+
+        // 兜底：本地 SFSpeechRecognizer 识别结果
+        let localText = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+        let d = doubaoText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let final = d.isEmpty ? localText : d
+        transcript = final
+        return final
+    }
+
+    // MARK: - 交互（按住说话 + 左移取消 + 右移转文字）
+
+    func start() {
+        guard zone == nil else { return }
+        zone = .normal
+        showTextConfirm = false
+        Task { await startRecording() }
+    }
+
+    func updateZone(_ z: RecZone) {
+        guard zone != nil else { return }
+        if zone != z { zone = z }
+    }
+
+    func end() {
+        guard zone != nil else { return }
+        let finalZone = zone ?? .normal
+
+        // 取消：只停止录音，不上传识别（避免无谓的接口请求）
+        if finalZone == .cancel {
+            zone = nil
+            stopEngineOnly()
+            return
+        }
+
+        isProcessing = true
+        Task {
+            let text = await stopRecording()
+            isProcessing = false
+            zone = nil
+            switch finalZone {
+            case .cancel:
+                break
+            case .normal:
+                if !text.isEmpty { onResult?(.send(text)) }
+            case .text:
+                confirmText = text
+                if !text.isEmpty { showTextConfirm = true }
+            }
+        }
+    }
+
+    func cancel() {
+        zone = nil
+        showTextConfirm = false
+        stopEngineOnly()
+    }
+
+    /// 仅停止录音并释放资源，不上传识别
+    private func stopEngineOnly() {
+        guard isRecording else { return }
+        isRecording = false
+        audioEngine.stop()
+        audioEngine.inputNode.removeTap(onBus: 0)
+        recognitionRequest?.endAudio()
+        recognitionTask?.cancel()
+        recognitionRequest = nil
+        recognitionTask = nil
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    }
+
+    func confirmSend(_ text: String) {
+        showTextConfirm = false
+        onResult?(.send(text))
+    }
+
+    // MARK: - WAV 组装
+
+    /// 把采集到的原始 Float32 PCM 重采样到 16kHz，并转成 Int16 PCM。
+    private func floatTo16kPCM(_ floatBytes: Data) -> Data {
+        guard !floatBytes.isEmpty else { return Data() }
+        let samples: [Float] = floatBytes.withUnsafeBytes { raw in
+            let count = raw.count / MemoryLayout<Float>.size
+            let base = raw.bindMemory(to: Float.self).baseAddress!
+            return Array(UnsafeBufferPointer(start: base, count: count))
+        }
+
+        // 重采样到 16kHz（线性插值）
+        var resampled: [Float]
+        if abs(nativeSampleRate - 16000) < 1 {
+            resampled = samples
+        } else if samples.count > 1 {
+            let ratio = nativeSampleRate / 16000.0
+            let outCount = Int(Double(samples.count) / ratio)
+            var out = [Float](repeating: 0, count: max(0, outCount))
+            for i in 0..<out.count {
+                let src = Double(i) * ratio
+                let i0 = Int(src)
+                let i1 = min(i0 + 1, samples.count - 1)
+                let frac = Float(src - Double(i0))
+                out[i] = samples[i0] * (1 - frac) + samples[i1] * frac
+            }
+            resampled = out
+        } else {
+            resampled = []
+        }
+
+        // Float32 -> Int16
+        var int16s = [Int16](repeating: 0, count: resampled.count)
+        for i in 0..<resampled.count {
+            let v = max(-1.0, min(1.0, resampled[i]))
+            int16s[i] = Int16(v * 32767.0)
+        }
+        return int16s.withUnsafeBytes { Data($0) }
+    }
+
+    private func buildWAV(from pcm: Data) -> Data {
+        guard !pcm.isEmpty else { return Data() }
+        var wav = Data()
+        let sampleRate: UInt32 = 16000
+        let channels: UInt16 = 1
+        let bitsPerSample: UInt16 = 16
+        let byteRate = sampleRate * UInt32(channels) * UInt32(bitsPerSample / 8)
+        let blockAlign = channels * (bitsPerSample / 8)
+        let dataSize = UInt32(pcm.count)
+
+        wav.append(contentsOf: Array("RIFF".utf8))
+        wav.append(u32le(36 + dataSize))
+        wav.append(contentsOf: Array("WAVE".utf8))
+        wav.append(contentsOf: Array("fmt ".utf8))
+        wav.append(u32le(16))
+        wav.append(u16le(1))            // PCM
+        wav.append(u16le(channels))
+        wav.append(u32le(sampleRate))
+        wav.append(u32le(byteRate))
+        wav.append(u16le(blockAlign))
+        wav.append(u16le(bitsPerSample))
+        wav.append(contentsOf: Array("data".utf8))
+        wav.append(u32le(dataSize))
+        wav.append(pcm)
+        return wav
+    }
+
+    private func u32le(_ v: UInt32) -> Data {
+        var x = v.littleEndian
+        return withUnsafeBytes(of: &x) { Data($0) }
+    }
+
+    private func u16le(_ v: UInt16) -> Data {
+        var x = v.littleEndian
+        return withUnsafeBytes(of: &x) { Data($0) }
+    }
+}
+
+/// 线程安全的 PCM 字节累积器（供音频 tap 回调使用）
+private final class PCMAccumulator {
+    private let lock = NSLock()
+    private var data = Data()
+
+    func reset() {
+        lock.lock(); defer { lock.unlock() }
+        data = Data()
+    }
+
+    func append(_ bytes: UnsafePointer<UInt8>, count: Int) {
+        lock.lock(); defer { lock.unlock() }
+        data.append(bytes, count: count)
+    }
+
+    func snapshot() -> Data {
+        lock.lock(); defer { lock.unlock() }
+        return data
     }
 }

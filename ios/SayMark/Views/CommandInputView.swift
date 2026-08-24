@@ -2,7 +2,7 @@ import SwiftUI
 
 struct CommandInputView: View {
     @Environment(\.dismiss) private var dismiss
-    @StateObject private var speechRecognizer = SpeechRecognizer()
+    @StateObject private var voice = VoiceRecorder()
     @State private var inputText = ""
     @State private var resultMessage: String?
     @State private var isSuccess = false
@@ -63,27 +63,29 @@ struct CommandInputView: View {
 
                         // 麦克风按钮
                         Button {
-                            if speechRecognizer.isRecording {
-                                speechRecognizer.stopRecording()
-                                if !speechRecognizer.transcript.isEmpty {
-                                    inputText = speechRecognizer.transcript
+                            if voice.isRecording {
+                                Task {
+                                    let text = await voice.stopRecording()
+                                    if !text.isEmpty {
+                                        inputText = text
+                                    }
                                 }
                             } else {
-                                Task { await speechRecognizer.startRecording() }
+                                Task { await voice.startRecording() }
                             }
                         } label: {
                             Image(systemName: "mic.fill")
                                 .font(.system(size: 22))
                                 .foregroundColor(.white)
                                 .frame(width: 44, height: 44)
-                                .background(Circle().fill(speechRecognizer.isRecording ? UIConstants.red : UIConstants.blue))
+                                .background(Circle().fill(voice.isRecording ? UIConstants.red : UIConstants.blue))
                                 .shadow(color: UIConstants.blue.opacity(0.33), radius: 14, y: 4)
                         }
                     }
 
                     // 语音转录文本
-                    if speechRecognizer.isRecording {
-                        Text(speechRecognizer.transcript.isEmpty ? "正在聆听..." : speechRecognizer.transcript)
+                    if voice.isRecording {
+                        Text(voice.transcript.isEmpty ? "正在聆听..." : voice.transcript)
                             .font(.system(size: 14))
                             .foregroundColor(UIConstants.label3)
                             .frame(maxWidth: .infinity, alignment: .leading)

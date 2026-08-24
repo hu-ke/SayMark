@@ -1,6 +1,6 @@
 """用户 Profile REST API —— 管理用户位置与常用地点。"""
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 
 from .. import pg_ops as crud
 from ..schemas import AddPlaceRequest, UpdateLocationRequest, UserProfileResponse
@@ -20,17 +20,11 @@ async def get_profile(device_id: str = ""):
 
 @router.put("/location", response_model=UserProfileResponse)
 async def update_location(device_id: str, body: UpdateLocationRequest):
-    """更新用户当前位置。"""
-    result = await crud.update_user_location(device_id, body.latitude, body.longitude)
-    if result is None:
-        raise HTTPException(404, "用户不存在，请先调用 GET /profile")
-    return result
+    """更新用户当前位置（用户不存在时自动创建）。"""
+    return await crud.update_user_location(device_id, body.latitude, body.longitude)
 
 
 @router.post("/places", response_model=UserProfileResponse)
 async def add_place(device_id: str, body: AddPlaceRequest):
-    """添加/更新常用地点（同名覆盖）。"""
-    result = await crud.add_user_place(device_id, body.name, body.lat, body.lon)
-    if result is None:
-        raise HTTPException(404, "用户不存在，请先调用 GET /profile")
-    return result
+    """添加/更新常用地点（同名覆盖；用户不存在时自动创建）。"""
+    return await crud.add_user_place(device_id, body.name, body.lat, body.lon)
