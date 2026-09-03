@@ -38,6 +38,12 @@ class FileMove(BaseModel):
     target_folder_id: str
 
 
+class FileRestore(BaseModel):
+    """恢复归档文件（缺省恢复原处；指定则移动到目标文件夹）。"""
+
+    target_folder_id: Optional[str] = None
+
+
 class FolderMove(BaseModel):
     target_folder_id: Optional[str] = None  # None 表示移动到顶级目录
 
@@ -159,6 +165,8 @@ class FileMetaResponse(BaseModel):
     date: str = ""      # 仅 appointment 有值 YYYY-MM-DD
     time: str = ""      # appointment=开始时间；alarm=周期触发时间 HH:MM
     recurrence: Optional[str] = None  # 仅 alarm：daily/weekly/monthly
+    todo_total: int = 0
+    todo_done: int = 0
     created_at: str
     updated_at: str
 
@@ -174,6 +182,20 @@ class FileResponse(BaseModel):
     date: str = ""
     time: str = ""
     recurrence: Optional[str] = None
+    todo_total: int = 0
+    todo_done: int = 0
+    created_at: str
+    updated_at: str
+
+
+class ArchivedFileResponse(BaseModel):
+    """归档文件列表项。"""
+
+    id: str
+    name: str
+    archived_path: str = ""
+    todo_total: int = 0
+    todo_done: int = 0
     created_at: str
     updated_at: str
 

@@ -61,6 +61,34 @@ struct SettingsView: View {
                             .cardStyle()
                         }
 
+                        // 归档
+                        Group {
+                            SectionHeader(title: "归档")
+                                .padding(.top, 10)
+                            VStack(spacing: 0) {
+                                NavigationLink {
+                                    ArchiveView()
+                                } label: {
+                                    HStack(spacing: 12) {
+                                        RowIcon(systemName: "archivebox", color: UIConstants.orange)
+                                        Text("归档")
+                                            .font(.system(size: 17))
+                                            .foregroundColor(UIConstants.label)
+                                            .kerning(-0.41)
+                                        Spacer()
+                                        Image(systemName: "chevron.right")
+                                            .font(.system(size: 16, weight: .medium))
+                                            .foregroundColor(UIConstants.label3)
+                                    }
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 11)
+                                    .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            .cardStyle()
+                        }
+
                         // 关于
                         Group {
                             SectionHeader(title: "关于")

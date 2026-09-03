@@ -13,12 +13,16 @@ struct NoteFile: Codable, Identifiable, Hashable {
     let recurrence: String?    // 仅 alarm：daily/weekly/monthly
     let createdAt: String
     let updatedAt: String
+    let todoTotal: Int = 0
+    let todoDone: Int = 0
 
     enum CodingKeys: String, CodingKey {
         case id, name, content, type, date, time, recurrence
         case parentId = "parent_id"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
+        case todoTotal = "todo_total"
+        case todoDone = "todo_done"
     }
 
     /// 是否为笔记
@@ -43,5 +47,25 @@ struct NoteFile: Codable, Identifiable, Hashable {
         case "monthly": return "每月"
         default: return "每天"
         }
+    }
+}
+
+/// 归档文件模型（GET /api/archive）
+struct ArchivedFile: Codable, Identifiable, Hashable {
+    let id: String
+    let name: String
+    let archivedPath: String
+    let todoTotal: Int
+    let todoDone: Int
+    let createdAt: String
+    let updatedAt: String
+
+    enum CodingKeys: String, CodingKey {
+        case id, name
+        case archivedPath = "archived_path"
+        case todoTotal = "todo_total"
+        case todoDone = "todo_done"
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
     }
 }

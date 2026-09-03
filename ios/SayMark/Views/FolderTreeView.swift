@@ -668,6 +668,12 @@ struct FileRowCard: View {
                     .kerning(-0.08)
             }
             Spacer()
+            if file.todoTotal > 0 {
+                Text("\(file.todoDone)/\(file.todoTotal)")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(file.todoDone == file.todoTotal ? UIConstants.green : UIConstants.label3)
+                    .kerning(-0.08)
+            }
             Image(systemName: "chevron.right")
                 .font(.system(size: 14))
                 .foregroundColor(UIConstants.label3)

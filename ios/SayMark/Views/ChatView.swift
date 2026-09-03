@@ -39,6 +39,16 @@ struct ChatView: View {
                     Spacer()
 
                     HStack(spacing: 14) {
+                        if viewModel.isStreaming {
+                            Button {
+                                viewModel.stopStreaming()
+                            } label: {
+                                Text("停止")
+                                    .font(.system(size: 15, weight: .medium))
+                                    .foregroundColor(UIConstants.red)
+                            }
+                        }
+
                         Button {
                             viewModel.newConversation()
                         } label: {
@@ -77,6 +87,18 @@ struct ChatView: View {
             if textEditOpen { textEditPanel }
         }
         .voiceRecorderOverlay(voice)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 30)
+                .onEnded { value in
+                    // 从左侧边缘右滑退出聊天（侧边栏/文字编辑弹窗打开时不触发）
+                    guard !sidebarOpen, !textEditOpen else { return }
+                    let w = value.translation.width
+                    let h = value.translation.height
+                    if value.startLocation.x < 40, w > 80, abs(w) > abs(h) {
+                        onClose()
+                    }
+                }
+        )
         .onAppear {
             // 识别结果路由：松开发送/转文字确认 → 发送到聊天
             voice.onResult = { result in
@@ -229,6 +251,13 @@ struct ChatView: View {
                     .padding(.horizontal, 14).padding(.vertical, 10)
                     .background(UIConstants.blue)
                     .clipShape(RoundedCorner(tl: 18, tr: 18, bl: 18, br: 4))
+            }
+            .contextMenu {
+                Button(role: .destructive) {
+                    viewModel.withdraw(messageId: msg.id)
+                } label: {
+                    Label("撤回", systemImage: "arrow.uturn.backward")
+                }
             }
         case .thinkingGroup:
             thinkingCard(msg)

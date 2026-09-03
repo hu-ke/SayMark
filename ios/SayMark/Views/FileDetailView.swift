@@ -30,7 +30,7 @@ struct FileDetailView: View {
     @State private var isUploadingImage = false
 
     private enum Dialog: String, Identifiable {
-        case delete, unsaved
+        case delete, unsaved, allDone
         var id: String { rawValue }
     }
 
@@ -174,6 +174,7 @@ struct FileDetailView: View {
         }
         .onAppear {
             folderTreeViewModel.hideFloatingButton = true
+            folderTreeViewModel.hideTabBar = true
             // 识别结果路由：松开发送/转文字确认 → 调整当前笔记
             voice.onResult = { result in
                 if case .send(let text) = result {
@@ -183,6 +184,7 @@ struct FileDetailView: View {
         }
         .onDisappear {
             folderTreeViewModel.hideFloatingButton = false
+            folderTreeViewModel.hideTabBar = false
             // 返回列表页时刷新目录树，保证详情页内的重命名/编辑/删除等改动即时可见
             Task { await folderTreeViewModel.loadTree() }
         }
@@ -196,7 +198,7 @@ struct FileDetailView: View {
             }
         }
         .confirmationDialog(
-            activeDialog == .delete ? "删除文件" : "内容已更改",
+            dialogTitle,
             isPresented: Binding(
                 get: { activeDialog != nil },
                 set: { if !$0 { activeDialog = nil } }
@@ -215,6 +217,9 @@ struct FileDetailView: View {
                     dismiss()
                 }
                 Button("取消", role: .cancel) {}
+            case .allDone:
+                Button("移入归档") { archiveFile() }
+                Button("暂不", role: .cancel) {}
             }
         } message: { dialog in
             switch dialog {
@@ -222,6 +227,8 @@ struct FileDetailView: View {
                 Text("将删除「\(viewModel.note?.name ?? fileName)」。此操作不可撤销。")
             case .unsaved:
                 Text("是否保存当前更改？")
+            case .allDone:
+                Text("已完成全部，是否移入归档？")
             }
         }
         .sheet(isPresented: $showMoveSheet) {
@@ -258,7 +265,9 @@ struct FileDetailView: View {
 
                 // 正文
                 if let content = note.content, !content.isEmpty {
-                    MarkdownPreview(text: content)
+                    MarkdownPreview(text: content, onToggleCheck: { index in
+                        toggleCheck(index)
+                    })
                         .contentShape(Rectangle())
                         .onTapGesture { enterEditMode(focus: .content) }
                 } else {
@@ -285,61 +294,60 @@ struct FileDetailView: View {
 
     // MARK: - Edit Mode
     private var editModeView: some View {
-        VStack(spacing: 12) {
-            // 标题
-            TextField("标题", text: $editedTitle)
-                .font(.system(size: 17, weight: .medium))
-                .foregroundColor(UIConstants.label)
-                .focused($focusedField, equals: .title)
-                .padding(10)
-                .background(UIConstants.card)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(UIConstants.separator, lineWidth: 1)
-                )
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                // 标题：与查看模式一致的大标题样式，仅可编辑（有光标）
+                TextField("标题", text: $editedTitle, axis: .vertical)
+                    .font(.system(size: 28, weight: .bold))
+                    .kerning(0.3)
+                    .foregroundColor(UIConstants.label)
+                    .focused($focusedField, equals: .title)
+                    .padding(.bottom, 12)
 
-            // 内容
-            TextEditor(text: $editedContent)
-                .font(.system(size: 14, design: .monospaced))
-                .foregroundColor(UIConstants.label)
-                .focused($focusedField, equals: .content)
-                .lineSpacing(6)
-                .scrollContentBackground(.hidden)
-                .padding(10)
-                .frame(maxHeight: .infinity)
-                .background(UIConstants.card)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(UIConstants.separator, lineWidth: 1)
-                )
-
-            // 已上传图片缩略图
-            if !uploadedImageURLs.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(uploadedImageURLs, id: \.self) { url in
-                            AsyncImage(url: URL(string: url)) { phase in
-                                if let image = phase.image {
-                                    image.resizable().scaledToFill()
-                                } else if phase.error != nil {
-                                    Color(UIConstants.fill)
-                                } else {
-                                    Color(UIConstants.fill).overlay(ProgressView().scaleEffect(0.7))
-                                }
-                            }
-                            .frame(width: 64, height: 64)
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
-                        }
-                    }
-                    .padding(.vertical, 2)
+                // 安排/闹钟信息卡片（与查看模式一致）
+                if let note = viewModel.note, note.isAppointment || note.isAlarm {
+                    ScheduleInfoCard(note: note)
                 }
+
+                // 正文：与查看模式正文一致，无边框无背景，仅可编辑（有光标）
+                TextEditor(text: $editedContent)
+                    .font(.system(size: 16))
+                    .foregroundColor(UIConstants.label)
+                    .lineSpacing(4)
+                    .kerning(-0.32)
+                    .focused($focusedField, equals: .content)
+                    .scrollContentBackground(.hidden)
+                    .scrollDisabled(true)
+                    .frame(minHeight: 240, alignment: .topLeading)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                // 已上传图片缩略图
+                if !uploadedImageURLs.isEmpty {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(uploadedImageURLs, id: \.self) { url in
+                                AsyncImage(url: URL(string: url)) { phase in
+                                    if let image = phase.image {
+                                        image.resizable().scaledToFill()
+                                    } else if phase.error != nil {
+                                        Color(UIConstants.fill)
+                                    } else {
+                                        Color(UIConstants.fill).overlay(ProgressView().scaleEffect(0.7))
+                                    }
+                                }
+                                .frame(width: 64, height: 64)
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                            }
+                        }
+                        .padding(.vertical, 2)
+                    }
+                }
+
+                Color.clear.frame(height: 80)
             }
+            .padding(.horizontal, 20)
+            .padding(.top, 16)
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 12)
-        .padding(.bottom, 12)
     }
 
     // MARK: - Bottom Toolbar
@@ -418,6 +426,8 @@ struct FileDetailView: View {
                     toolIcon("list.bullet")
                 }
 
+                Button { insertChecklist() } label: { toolIcon("checklist") }
+
                 Button { insertInline("**粗体**") } label: { toolIcon("bold") }
                 Button { insertInline("*斜体*") } label: { toolIcon("italic") }
                 Button { insertLinePrefix("## ") } label: { toolIcon("textformat") }
@@ -453,6 +463,13 @@ struct FileDetailView: View {
     private func insertListMarker(_ marker: String) {
         ensureTrailingNewline()
         editedContent += marker + " "
+        focusedField = .content
+    }
+
+    /// 插入清单项（- [ ]）
+    private func insertChecklist() {
+        ensureTrailingNewline()
+        editedContent += "- [ ] "
         focusedField = .content
     }
 
@@ -504,6 +521,14 @@ struct FileDetailView: View {
     }
 
     // MARK: - Actions
+    private var dialogTitle: String {
+        switch activeDialog {
+        case .delete: return "删除文件"
+        case .unsaved: return "内容已更改"
+        case .allDone, .none: return "已完成全部"
+        }
+    }
+
     private var hasChanges: Bool {
         let savedTitle = viewModel.note?.name ?? ""
         let savedContent = viewModel.note?.content ?? ""
@@ -580,6 +605,53 @@ struct FileDetailView: View {
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 1_600_000_000)
             showToast = false
+        }
+    }
+
+    // MARK: - Checklist
+
+    /// 切换第 N 个 checklist 项（index 与 MarkdownPreview 解析顺序一致）的 [ ]↔[x] 并保存
+    private func toggleCheck(_ index: Int) {
+        guard let note = viewModel.note else { return }
+        let content = note.content ?? ""
+        var lines = content.components(separatedBy: .newlines)
+        var checkIndex = 0
+
+        for i in 0..<lines.count {
+            let trimmed = lines[i].trimmingCharacters(in: .whitespaces)
+            guard trimmed.range(of: #"^[-*]\s*\[([ xX])\]"#, options: .regularExpression) != nil else { continue }
+            if checkIndex == index {
+                if let range = lines[i].range(of: #"\[[ xX]\]"#, options: .regularExpression) {
+                    let newValue = lines[i][range] == "[ ]" ? "[x]" : "[ ]"
+                    lines[i].replaceSubrange(range, with: newValue)
+                }
+                break
+            }
+            checkIndex += 1
+        }
+
+        let newContent = lines.joined(separator: "\n")
+        Task { @MainActor in
+            await viewModel.save(name: note.name, content: newContent)
+            if let updated = viewModel.note,
+               updated.todoTotal > 0,
+               updated.todoDone == updated.todoTotal {
+                activeDialog = .allDone
+            }
+        }
+    }
+
+    // MARK: - Archive
+
+    private func archiveFile() {
+        Task { @MainActor in
+            do {
+                try await APIClient.shared.archiveFile(id: fileId)
+                await folderTreeViewModel.loadTree()
+                dismiss()
+            } catch {
+                showToastMessage(error.localizedDescription)
+            }
         }
     }
 
@@ -740,6 +812,7 @@ struct FolderMoveSheet: View {
 // MARK: - Markdown Preview
 struct MarkdownPreview: View {
     let text: String
+    var onToggleCheck: ((Int) -> Void)? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -792,6 +865,25 @@ struct MarkdownPreview: View {
                     .clipShape(RoundedRectangle(cornerRadius: 10))
                     .padding(.vertical, 6)
 
+                case .checkItem(let index, let checked, let content):
+                    Button {
+                        onToggleCheck?(index)
+                    } label: {
+                        HStack(alignment: .top, spacing: 8) {
+                            Image(systemName: checked ? "checkmark.square.fill" : "square")
+                                .font(.system(size: 16))
+                                .foregroundColor(checked ? UIConstants.blue : UIConstants.label3)
+                            Text(inlineMarkdown(content))
+                                .font(.system(size: 15))
+                                .foregroundColor(checked ? UIConstants.label3 : UIConstants.label)
+                                .strikethrough(checked)
+                                .lineSpacing(3)
+                        }
+                        .padding(.leading, 12)
+                        .padding(.vertical, 1.5)
+                    }
+                    .buttonStyle(.plain)
+
                 case .bulletItem(let marker, let content):
                     HStack(alignment: .top, spacing: 6) {
                         Text(marker)
@@ -838,6 +930,7 @@ struct MarkdownPreview: View {
         case body(String)
         case blockquote(String)
         case image(String)
+        case checkItem(index: Int, checked: Bool, content: String)
         case bulletItem(marker: String, content: String)
         case orderedItem(Int, String)
     }
@@ -846,6 +939,7 @@ struct MarkdownPreview: View {
         let lines = text.components(separatedBy: .newlines)
         var blocks: [BlockType] = []
         var orderedCounter = 0
+        var checkCounter = 0
 
         for line in lines {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
@@ -883,6 +977,18 @@ struct MarkdownPreview: View {
                     orderedCounter = 0
                     blocks.append(.body(trimmed))
                 }
+            }
+            // Checklist（- [ ] / - [x]，需在普通列表前判断）
+            else if let match = trimmed.range(of: #"^[-*]\s*\[([ xX])\]"#, options: .regularExpression) {
+                orderedCounter = 0
+                let matched = trimmed[match]
+                let checked = matched.lowercased().contains("x")
+                var content = String(trimmed[match.upperBound...])
+                if content.hasPrefix(" ") {
+                    content = String(content.dropFirst())
+                }
+                blocks.append(.checkItem(index: checkCounter, checked: checked, content: content))
+                checkCounter += 1
             }
             // Unordered list（支持原点 / 爱心 / 五角星等自定义标记）
             else if trimmed.hasPrefix("- ") {

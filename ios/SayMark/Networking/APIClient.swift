@@ -55,6 +55,7 @@ final class APIClient {
         var req = URLRequest(url: url)
         req.httpMethod = method
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue(DeviceID.shared.id, forHTTPHeaderField: "X-Device-ID")
         if let body = body {
             req.httpBody = try JSONEncoder().encode(AnyEncodable(body))
         }
@@ -162,6 +163,25 @@ final class APIClient {
         struct Body: Encodable { let target_folder_id: String? }
         try await requestEmpty(path: "/api/folders/\(id)/move", method: "PUT",
                                body: Body(target_folder_id: targetFolderId))
+    }
+
+    // MARK: - 归档
+
+    /// 将文件移入归档（POST /api/files/{id}/archive）
+    func archiveFile(id: String) async throws {
+        try await requestEmpty(path: "/api/files/\(id)/archive", method: "POST")
+    }
+
+    /// 恢复归档文件到原处或移动到指定文件夹（POST /api/files/{id}/restore）
+    func restoreFile(id: String, targetFolderId: String?) async throws {
+        struct Body: Encodable { let target_folder_id: String? }
+        try await requestEmpty(path: "/api/files/\(id)/restore", method: "POST",
+                               body: Body(target_folder_id: targetFolderId))
+    }
+
+    /// 获取归档文件列表（GET /api/archive）
+    func getArchivedFiles() async throws -> [ArchivedFile] {
+        try await request(path: "/api/archive", method: "GET")
     }
 
     func reorder(type: String, sourceId: String, targetId: String) async throws {

@@ -171,6 +171,7 @@ _AGENT_SYSTEM_PROMPT = f"""\
 
 3. create_appointment — 创建安排（有明确时间的一次性事项，倒计时「X分钟后/X小时后」也算）
    参数：title(标题), date(YYYY-MM-DD), time?(HH:MM), content(详情)
+   重要：content 必须包含用户要求记录的全部详情（如「准备物品清单：护照、充电器…」「注意事项…」等），**不要留空**。用户让你「列出清单/准备物品」时，把清单内容完整写入 content，reply 里只需简短确认已创建并提醒时间。
    注意：「X分钟后/小时后」→ date=今天, time=当前时间+X；不要用 create_alarm。
 
 4. append_note — 补充内容到已有笔记、安排或闹钟
@@ -178,7 +179,7 @@ _AGENT_SYSTEM_PROMPT = f"""\
 
 5. create_alarm — 创建闹钟（周期性提醒，如「每天1点喊我睡觉」「每周一9点提醒」）
    参数：name(名称), time(HH:MM 触发时间), recurrence(daily/weekly/monthly，缺省 daily), content(备注)
-   注意：只有周期性提醒才用 create_alarm。「每天/每周/每月 + 时间」→ daily/weekly/monthly；只说一次「X分钟后/X小时后」的一次性倒计时用 create_appointment。
+   注意：content 必须包含用户要求记录的完整备注内容（不要留空）。只有周期性提醒才用 create_alarm。「每天/每周/每月 + 时间」→ daily/weekly/monthly；只说一次「X分钟后/X小时后」的一次性倒计时用 create_appointment。
 
 6. create_folder — 创建文件夹
    参数：name, parent_folder_id?(父目录id)
@@ -367,6 +368,9 @@ async def chat_stream(body: ChatRequest):
         user_lon = body.longitude
         device_id = body.device_id.strip()
         conv_id = body.conversation_id.strip() or uuid.uuid4().hex
+        # 流式响应不受中间件上下文影响，这里手动注入设备隔离上下文
+        crud.set_device_id(device_id)
+        logger.info(f"[chat] device={device_id or '-'} conv={conv_id} text={text[:50]}")
 
         # 1. Task Init: 立即返回 conversation_id
         yield f"data: {json.dumps({'conversation_id': conv_id, 'status': 'loading'})}\n\n"

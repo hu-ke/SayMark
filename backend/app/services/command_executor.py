@@ -6,6 +6,8 @@
 
 from typing import Any, Optional
 
+from loguru import logger
+
 from .. import pg_ops as db
 from . import note_generator, qwen
 
@@ -47,8 +49,9 @@ async def _resolve_files_by_name(name: str) -> tuple[list[dict], str]:
     """按名称查找文件：SQL ILIKE 匹配 → 语义搜索兜底。"""
     if not name:
         return [], ""
-    results = await db.run_safe_query(
-        f"SELECT id, name, type, date, time, created_at, updated_at FROM files WHERE name ILIKE '%{name}%' LIMIT 5"
+    results = await db.pg_db.fetch(
+        "SELECT id, name, type, date, time, created_at, updated_at FROM files WHERE name ILIKE $1 AND device_id=$2 LIMIT 5",
+        f"%{name}%", db._did(),
     )
     if results:
         return results, "名称匹配"
@@ -62,8 +65,9 @@ async def _resolve_folders_by_name(name: str) -> tuple[list[dict], str]:
     """按名称查找文件夹（SQL ILIKE）。"""
     if not name:
         return [], ""
-    results = await db.run_safe_query(
-        f"SELECT id, name, parent_id, created_at, updated_at FROM folders WHERE name ILIKE '%{name}%' LIMIT 5"
+    results = await db.pg_db.fetch(
+        "SELECT id, name, parent_id, created_at, updated_at FROM folders WHERE name ILIKE $1 AND device_id=$2 LIMIT 5",
+        f"%{name}%", db._did(),
     )
     return results, "名称匹配"
 
@@ -71,6 +75,7 @@ async def _resolve_folders_by_name(name: str) -> tuple[list[dict], str]:
 async def execute(parsed: dict) -> dict:
     """根据解析结果执行操作。"""
     action = parsed.get("action", "")
+    logger.info(f"[exec] action={action} params={parsed}")
     try:
         handlers = {
             "create_note": _handle_create_note,
@@ -192,12 +197,12 @@ async def _resolve_file(parsed: dict, action: str) -> tuple[int | None, dict | N
 
 
 async def _handle_run_query(parsed: dict) -> dict:
-    """执行安全的 SQL SELECT 查询。"""
+    """执行安全的 SQL SELECT 查询（带设备隔离）。"""
     sql = parsed.get("sql", "")
     if not sql:
         return _result("run_query", False, "缺少 SQL 查询语句")
     try:
-        rows = await db.run_safe_query(sql)
+        rows = await db.run_scoped_query(sql)
         return _result("run_query", True, f"查询返回 {len(rows)} 条结果", {"rows": rows, "count": len(rows)})
     except ValueError as e:
         return _result("run_query", False, str(e))

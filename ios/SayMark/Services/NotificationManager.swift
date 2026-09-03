@@ -67,8 +67,11 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
     private func scheduleAppointment(_ item: Appointment) {
         guard !item.date.isEmpty else { return }
         let timeStr = item.timeDisplay
-        let dateStr = item.date + (timeStr.isEmpty ? "T00:00" : "T\(timeStr)")
+        let dateStr = item.date + (timeStr.isEmpty ? "T09:00" : "T\(timeStr)")
         let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.timeZone = TimeZone.current
         formatter.dateFormat = "yyyy-MM-dd'T'HH:mm"
         guard let date = formatter.date(from: dateStr) else {
             print("[Notify] 跳过「\(item.name)」：无法解析 date=\(item.date) time=\(item.time)")

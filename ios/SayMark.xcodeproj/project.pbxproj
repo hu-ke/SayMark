@@ -27,6 +27,7 @@
 		6A4580CCA890D7AB1E79E0B8 /* DeviceID.swift in Sources */ = {isa = PBXBuildFile; fileRef = 164790EF45F22BF2EE0BDF4C /* DeviceID.swift */; };
 		7A1A43B96E884C8B0CD450F5 /* AVFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A9A25F1E37A1132E151AB815 /* AVFoundation.framework */; };
 		801032D12F7B05C048103F42 /* FolderTreeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43CF3E21C3E5B6A8894B7FCF /* FolderTreeView.swift */; };
+		871E1E25D3EC4A376CD8F881 /* ArchiveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D15E73750E1730A0555C34BB /* ArchiveView.swift */; };
 		90196DEC7CA6C282DA9535AF /* AlarmsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7B3AF19BABDA16B944F7EEC /* AlarmsView.swift */; };
 		93F114A86FD2264DDE7F3364 /* CommandInputView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87B8EE13F86150EC6154F854 /* CommandInputView.swift */; };
 		9586C12AC4104279C8C1EB77 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78D535DE97CFB3E5EAD25013 /* RootView.swift */; };
@@ -59,11 +60,12 @@
 		87B8EE13F86150EC6154F854 /* CommandInputView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandInputView.swift; sourceTree = "<group>"; };
 		A9A25F1E37A1132E151AB815 /* AVFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVFoundation.framework; path = System/Library/Frameworks/AVFoundation.framework; sourceTree = SDKROOT; };
 		B59D25B1E1F2199DBDCE880C /* CalendarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarView.swift; sourceTree = "<group>"; };
-		BB4A4C0AC8816F24E4876B38 /* SayMark.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SayMark.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		BB4A4C0AC8816F24E4876B38 /* SayMark.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = SayMark.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C4E11FF51E485892D46416D5 /* NoteViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteViewModel.swift; sourceTree = "<group>"; };
 		C7B3AF19BABDA16B944F7EEC /* AlarmsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlarmsView.swift; sourceTree = "<group>"; };
 		CA85CA260FA3DB7EC67B9F87 /* Folder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Folder.swift; sourceTree = "<group>"; };
 		CD6A795B59A8165D2D98B1C5 /* RenameSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RenameSheet.swift; sourceTree = "<group>"; };
+		D15E73750E1730A0555C34BB /* ArchiveView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArchiveView.swift; sourceTree = "<group>"; };
 		D555133413D382A2720F3DC3 /* SpeechRecognizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechRecognizer.swift; sourceTree = "<group>"; };
 		D6E93B02CE6559CB2B99C737 /* FileDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileDetailView.swift; sourceTree = "<group>"; };
 		DD61E5389B76681453EA71E2 /* FolderRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolderRowView.swift; sourceTree = "<group>"; };
@@ -129,6 +131,7 @@
 			children = (
 				C7B3AF19BABDA16B944F7EEC /* AlarmsView.swift */,
 				F5A1E12CDE4699CE6395B467 /* AppointmentsView.swift */,
+				D15E73750E1730A0555C34BB /* ArchiveView.swift */,
 				B59D25B1E1F2199DBDCE880C /* CalendarView.swift */,
 				3A8A17801F3EFFE675F603CE /* ChatView.swift */,
 				87B8EE13F86150EC6154F854 /* CommandInputView.swift */,
@@ -238,9 +241,6 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
-					C7D04D6F26FC207BA572F9F0 = {
-						ProvisioningStyle = Automatic;
-					};
 				};
 			};
 			buildConfigurationList = CE040C44EFD0B9EDE8741846 /* Build configuration list for PBXProject "SayMark" */;
@@ -274,6 +274,7 @@
 				2825E1D69940380CF9B0D2E6 /* AppConfig.swift in Sources */,
 				C83A658818DAC17DF2BACBB9 /* Appointment.swift in Sources */,
 				46B7D9668F2E2C3F9D5F1901 /* AppointmentsView.swift in Sources */,
+				871E1E25D3EC4A376CD8F881 /* ArchiveView.swift in Sources */,
 				9D42442C2124ECB19429775A /* CalendarView.swift in Sources */,
 				48CE263A8ADF77CE19E82BAC /* ChatView.swift in Sources */,
 				4E96350B519C268FA156AF77 /* ChatViewModel.swift in Sources */,
@@ -363,10 +364,8 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_LANGUAGE = "zh-Hans";
-				DEVELOPMENT_TEAM = 7AEU9RWVS5;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = SayMark/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -448,10 +447,8 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_LANGUAGE = "zh-Hans";
-				DEVELOPMENT_TEAM = 7AEU9RWVS5;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = SayMark/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (

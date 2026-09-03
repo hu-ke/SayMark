@@ -20,6 +20,7 @@ struct RootView: View {
     @StateObject private var voice = VoiceRecorder()
     @State private var locateFolderId: String?
     @State private var selectedTab = 0
+    @Environment(\.scenePhase) private var scenePhase
 
     // 聊天
     @State private var showChat = false
@@ -53,17 +54,19 @@ struct RootView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                SayMarkTabBar(
-                    selectedTab: $selectedTab,
-                    showMic: !viewModel.hideFloatingButton,
-                    onRecordStart: { voice.start() },
-                    onRecordChanged: { zone in
-                        voice.updateZone(zone)
-                    },
-                    onRecordEnd: { _ in
-                        voice.end()
-                    }
-                )
+                if !viewModel.hideTabBar {
+                    SayMarkTabBar(
+                        selectedTab: $selectedTab,
+                        showMic: !viewModel.hideFloatingButton,
+                        onRecordStart: { voice.start() },
+                        onRecordChanged: { zone in
+                            voice.updateZone(zone)
+                        },
+                        onRecordEnd: { _ in
+                            voice.end()
+                        }
+                    )
+                }
             }
 
             // 聊天全屏
@@ -79,6 +82,12 @@ struct RootView: View {
             // 每次切回「文件」列表页都刷新目录树，保证聊天/其它操作后的增删改及时可见
             if newTab == 0 {
                 Task { await viewModel.loadTree() }
+            }
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            // 回到前台时重新同步本地通知，避免新增/修改安排闹钟后遗漏提醒
+            if newPhase == .active {
+                Task { await NotificationManager.shared.refreshFromServer() }
             }
         }
         .task {

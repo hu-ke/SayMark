@@ -5,19 +5,18 @@
 
 from contextlib import asynccontextmanager
 
-from fastapi import APIRouter, FastAPI
+from fastapi import APIRouter, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from . import pg_ops
 from .pg_db import close_pool
-from .routers import ai, alarms, appointments, asr, files, folders, geo, notes, reorder, upload, user
+from .routers import ai, alarms, appointments, archive, asr, files, folders, geo, notes, reorder, upload, user
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期：启动时初始化资源，关闭时释放。"""
     await pg_ops.ensure_schema()
-    await pg_ops.get_default_uncategorized_folder()
     yield
     await close_pool()
 
@@ -33,6 +32,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.middleware("http")
+async def device_scope_middleware(request: Request, call_next):
+    """从请求头读取设备标识，为数据访问层注入数据隔离上下文。"""
+    did = request.headers.get("X-Device-ID", "") or ""
+    pg_ops.set_device_id(did)
+    try:
+        if did:
+            await pg_ops.claim_legacy_data(did)
+        return await call_next(request)
+    finally:
+        pg_ops.set_device_id("")
+
 # 所有业务路由统一挂在 /saymark-service 前缀下（配合部署/本机调试 baseURL）
 service = APIRouter(prefix="/saymark-service")
 service.include_router(folders.router)
@@ -46,6 +58,7 @@ service.include_router(geo.router)
 service.include_router(user.router)
 service.include_router(asr.router)
 service.include_router(upload.router)
+service.include_router(archive.router)
 app.include_router(service)
 
 

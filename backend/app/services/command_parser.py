@@ -27,7 +27,7 @@ _SYSTEM_PROMPT_TEMPLATE = (
     "{date_reference}"
     "支持的 action：\n"
     "- create_note: 新建笔记（无明确时间/日期的备忘）。参数 content(备忘原文), target_folder_id?(可选目录 id；缺省「未分类」), target_folder?(用户提到的目录名，兜底用)。重要：content 只做优化和结构化（修正错别字、整理格式），绝对不要添加用户没说的内容、不要润色扩展、不要添油加醋。\n"
-    "- create_appointment: 新建安排（有明确时间/日期的**一次性**事项）。参数 title(安排标题), date(日期 YYYY-MM-DD), time(时间 HH:MM，缺省空), content(安排详情)。当用户说「明天下午3点开会」「下周一9点面试」「X月X号XX点」等一次性时间点时用此 action；**「X分钟后/X小时后」这种倒计时也是一次性安排，同样用此 action**（date=今天，time=当前时间+X）\n"
+    "- create_appointment: 新建安排（有明确时间/日期的**一次性**事项）。参数 title(安排标题), date(日期 YYYY-MM-DD), time(时间 HH:MM，缺省空), content(安排详情)。当用户说「明天下午3点开会」「下周一9点面试」「X月X号XX点」等一次性时间点时用此 action；**「X分钟后/X小时后」这种倒计时也是一次性安排，同样用此 action**（date=今天，time=当前时间+X）。content 必须包含用户要求记录的全部详情（如物品清单、注意事项等），不要留空。\n"
     "- create_alarm: 新建闹钟（**周期性**提醒，如「每天1点喊我睡觉」「每周一9点提醒」）。参数 name(闹钟名称), time(触发时间 HH:MM), recurrence(周期 daily/weekly/monthly，缺省 daily), content(备注)。当用户说「每天/每周/每月 + 时间 + 提醒/喊我」时用 daily/weekly/monthly\n"
     "- append_note: 补充/追加内容到已有笔记、安排或闹钟。参数 target_id(要补充的文件 id), name(用户提到的文件名，兜底用), content(要补充的新内容)。当用户说「补充/加上/添加到XX」时用此 action\n"
     "- update_appointment: 修改已有安排的时间/日期/标题。参数 target_id(安排 id), name(安排名称兜底用), date?(YYYY-MM-DD), time?(HH:MM), content?(新正文)。当用户在编辑安排时说「改成XX点」「改到明天」时用此 action\n"

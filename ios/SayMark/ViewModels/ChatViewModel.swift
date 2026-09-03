@@ -93,6 +93,34 @@ final class ChatViewModel: ObservableObject {
         messages[idx] = msg
     }
 
+    /// 撤回某条已发送的用户消息（同时移除其后继的 AI 回复，并在流式时中断后端）
+    func withdraw(messageId: String) {
+        guard let idx = messages.firstIndex(where: { $0.id == messageId }) else { return }
+        messages.removeSubrange(idx...)
+        if isStreaming {
+            currentStreamTask?.cancel()
+            typewriterTask?.cancel()
+            pendingStepFullText = nil
+            currentThinkingId = nil
+            isStreaming = false
+        }
+    }
+
+    /// 停止当前生成（中断后端流式处理）
+    func stopStreaming() {
+        currentStreamTask?.cancel()
+        typewriterTask?.cancel()
+        pendingStepFullText = nil
+        currentThinkingId = nil
+        isStreaming = false
+        if let idx = messages.lastIndex(where: { $0.isStreaming }) {
+            messages[idx] = ChatMessage(
+                id: messages[idx].id, role: messages[idx].role, content: messages[idx].content,
+                isStreaming: false, isThinking: false, steps: [], isExpanded: true, liveText: ""
+            )
+        }
+    }
+
     // MARK: - 真正的流式接收（token 到了立刻显示）
 
     private func streamChat(text: String) async {

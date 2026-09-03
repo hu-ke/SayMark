@@ -11,6 +11,7 @@
 | `id` | SERIAL PK | 文件夹 ID |
 | `name` | VARCHAR(255) NOT NULL | 文件夹名 |
 | `parent_id` | INTEGER FK→folders(id) | 父文件夹 ID，NULL 表示顶级 |
+| `device_id` | VARCHAR(255) NOT NULL DEFAULT '' | 所属设备标识（数据隔离） |
 | `position` | INTEGER | 同级排序 |
 | `created_at` | TIMESTAMPTZ | 创建时间 |
 | `updated_at` | TIMESTAMPTZ | 更新时间 |
@@ -21,6 +22,7 @@
 |---|---|---|
 | `id` | SERIAL PK | ID |
 | `name` | VARCHAR(255) NOT NULL | 标题 |
+| `device_id` | VARCHAR(255) NOT NULL DEFAULT '' | 所属设备标识（数据隔离） |
 | `content` | TEXT | 正文 / 备注 |
 | `parent_id` | INTEGER FK→folders(id) | 所属文件夹（笔记使用；安排/闹钟为 NULL） |
 | `type` | VARCHAR(20) | 'note'（笔记）/ 'appointment'（安排，一次性）/ 'alarm'（闹钟，周期性） |
@@ -29,6 +31,9 @@
 | `recurrence` | VARCHAR(20) | 仅 alarm：'daily' / 'weekly' / 'monthly' |
 | `position` | INTEGER | 同级排序 |
 | `embedding` | FLOAT8[] | 语义搜索向量 |
+| `archived` | BOOLEAN NOT NULL DEFAULT FALSE | 是否已归档 |
+| `archived_parent_id` | INTEGER FK→folders(id) | 归档前所属文件夹，文件夹删除时置 NULL |
+| `archived_path` | TEXT | 归档时所在路径的文本快照 |
 | `created_at` | TIMESTAMPTZ | 创建时间 |
 | `updated_at` | TIMESTAMPTZ | 更新时间 |
 
