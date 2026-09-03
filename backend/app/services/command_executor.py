@@ -85,6 +85,7 @@ async def execute(parsed: dict) -> dict:
             "update_appointment": _handle_update_appointment,
             "update_alarm": _handle_update_alarm,
             "delete_alarm": _handle_delete_alarm,
+            "delete_reminders_before": _handle_delete_reminders_before,
             "save_place": _handle_save_place,
             "create_folder": _handle_create_folder,
             "rename": _handle_rename,
@@ -281,6 +282,18 @@ async def _handle_delete_alarm(parsed: dict) -> dict:
     if not ok:
         return _result("delete_alarm", False, "删除闹钟失败")
     return _result("delete_alarm", True, "已删除闹钟", None)
+
+
+async def _handle_delete_reminders_before(parsed: dict) -> dict:
+    """批量删除某日期之前的所有安排（一次性提醒）。"""
+    date_str = str(parsed.get("date") or "").strip()
+    if not date_str:
+        return _result("delete_reminders_before", False, "缺少日期 date (YYYY-MM-DD)")
+    try:
+        count = await db.delete_reminders_before(date_str)
+    except ValueError as e:
+        return _result("delete_reminders_before", False, str(e))
+    return _result("delete_reminders_before", True, f"已删除 {count} 条安排", {"deleted": count})
 
 
 async def _handle_update_appointment(parsed: dict) -> dict:

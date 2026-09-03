@@ -822,3 +822,16 @@ async def list_alarms() -> list[dict]:
         ' FROM files WHERE type=$1 AND device_id=$2 ORDER BY "time"',
         "alarm", _did(),
     )
+
+
+async def delete_reminders_before(date_str: str) -> int:
+    """删除指定日期（YYYY-MM-DD）之前的所有安排（一次性提醒），返回删除条数。"""
+    target_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+    did = _did()
+    r = await pg_db.execute(
+        "DELETE FROM files WHERE type='appointment' AND date < $1 AND device_id=$2",
+        target_date, did,
+    )
+    count = int(r.split()[-1]) if r and r.split()[-1].isdigit() else 0
+    logger.info(f"[delete] 批量删除 {date_str} 之前的安排 {count} 条 device={did}")
+    return count

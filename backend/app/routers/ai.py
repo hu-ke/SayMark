@@ -211,6 +211,10 @@ _AGENT_SYSTEM_PROMPT = f"""\
 15. delete_alarm — 删除闹钟
     参数：target_id?(闹钟id), name?(名称兜底)
 
+16. delete_reminders_before — 批量删除某日期之前的所有安排（一次性提醒）
+    参数：date(YYYY-MM-DD 截止日期，删除所有 date < 该日期的安排)
+    用途：当用户说「删除X月X号之前的所有提醒/安排」「清空X月以前的日程」等批量按日期删除时，**必须**用这个工具，不要逐条 delete，也不要只回复文字。
+
 ## 输出格式
 
 - 需要调用工具时（可一次多个），必须包含 thinking 字段说明你的计划：
@@ -224,7 +228,7 @@ _AGENT_SYSTEM_PROMPT = f"""\
 1. **优先用 run_query 查询信息**：需要查找已有笔记/安排/闹钟/文件夹时，先生成 SQL 查询。
 2. 区分笔记 / 安排 / 闹钟：有具体未来时间点（一次性）→ create_appointment；只说一次「X分钟后/X小时后」的倒计时也是一次性 → create_appointment(date=今天, time=当前+X)；周期性提醒 → create_alarm（每天/每周/每月 + 时间 → daily/weekly/monthly）；只是记东西 → create_note。
 3. 操作已存在的项时，先 run_query 找到 id，再操作。
-4. 删除操作需用户确认：输出 done 并在 reply 中询问。
+4. 删除操作：必须调用 delete / delete_alarm / delete_reminders_before 工具（系统会自动弹出二次确认）。**绝不要**只输出文字「已删除」而不调用任何工具。
 5. **创建安排/闹钟一步到位**：安排和闹钟是独立实体，各用一条工具调用创建即可，不要分两步。例如「每天中午12点喊我午休」→ create_alarm(name=午休, time=12:00, recurrence=daily)。
 6. **创建笔记时禁止添油加醋**：用户说「记一下：今天买了苹果」→ content="今天买了苹果"（只修正错别字和格式），**不要**扩展成「今天买了苹果，苹果富含维生素…」之类的废话。你只是帮用户整理，不是代用户写作。
 7. **时间必须转成绝对时间**：把「今天/明天/后天/大后天/昨天/前天/下周X/下下周X」等相对时间，严格按上文「日期参考」换算成 YYYY-MM-DD（有具体钟点再填 HH:MM）。创建安排/闹钟时，title、content 中禁止出现「明天」「后天」「今天」等相对时间词，一律用绝对日期/时间表达（如「2026-08-25 08:00」或「8月25日早上8点」）。
@@ -271,6 +275,7 @@ def _action_label(step: dict) -> str:
         "update_appointment": f"调整安排{name_part}",
         "update_alarm": f"调整闹钟{name_part}",
         "delete_alarm": f"删除闹钟{name_part}",
+        "delete_reminders_before": f"删除{step.get('date', '') or '指定日期'}之前的安排",
         "save_place": f"保存地点{name_part}",
         "create_folder": f"创建文件夹{name_part}",
         "rename": f"重命名{name_part}",
@@ -462,8 +467,9 @@ async def chat_stream(body: ChatRequest):
             # 路径 A：有 tool_calls → 执行工具，反馈观察
             tool_calls = agent_output.get("tool_calls", [])
             if tool_calls:
-                # 删除操作强制二次确认（除非用户明确说跳过）
-                has_delete = any(tc.get("action") == "delete" for tc in tool_calls)
+                # 删除类操作强制二次确认（除非用户明确说跳过）
+                _delete_actions = {"delete", "delete_alarm", "delete_reminders_before"}
+                has_delete = any(tc.get("action") in _delete_actions for tc in tool_calls)
                 if has_delete and not _is_skip_confirm(body.text.strip()):
                     pending = [_tool_call_to_step(tc) for tc in tool_calls]
                     _pending_chat_steps[conv_id] = pending
